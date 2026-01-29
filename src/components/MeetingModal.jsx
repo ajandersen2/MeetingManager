@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Share2, Trash2, Edit3, Calendar, Clock, MapPin, Target, Users, FileText, Mic, Paperclip, UserCheck, User } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import MeetingTab from './MeetingTab'
 import AgendaTab from './AgendaTab'
 import MinutesTab from './MinutesTab'
@@ -9,10 +10,15 @@ import AttachmentsTab from './AttachmentsTab'
 const TABS = ['Meeting', 'Agenda', 'Minutes', 'Attachments']
 
 export default function MeetingModal({ meeting, groupId, onClose, onSave, onDelete }) {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('Meeting')
   const [isEditing, setIsEditing] = useState(!meeting)
   const [expandedSection, setExpandedSection] = useState(null)
   const [attachments, setAttachments] = useState([])
+
+  // Check if current user owns this meeting
+  const isOwner = !meeting || meeting.user_id === user?.id
+
   const [formData, setFormData] = useState({
     name: '',
     date: '',
@@ -341,7 +347,8 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
         <header className="modal-header">
           <h2 className="modal-title">{formData.name || 'New Meeting'}</h2>
           <div className="modal-header-actions">
-            {meeting && !isEditing && (
+            {/* Only show Edit button if user owns this meeting */}
+            {meeting && !isEditing && isOwner && (
               <button className="btn btn-primary btn-sm" onClick={() => setIsEditing(true)}>
                 <Edit3 size={14} />
                 Edit
@@ -364,7 +371,8 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
 
         <footer className="modal-footer">
           <div>
-            {meeting && (
+            {/* Only show Delete button if user owns this meeting */}
+            {meeting && isOwner && (
               <button
                 className="btn btn-danger btn-icon"
                 onClick={() => onDelete(meeting.id)}
@@ -389,8 +397,8 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
                 <button className="btn btn-secondary" onClick={onClose}>
                   Close
                 </button>
-                {/* Always show Save for existing meetings - user may edit minutes in view mode */}
-                {meeting && (
+                {/* Only show Save button for owners */}
+                {meeting && isOwner && (
                   <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                     {saving ? 'Saving...' : 'Save'}
                   </button>
