@@ -37,7 +37,8 @@ export default function Meetings() {
                 .from('meetings')
                 .select(`
           *,
-          meeting_attendees (id, name, user_id)
+          meeting_attendees (id, name, user_id),
+          creator:user_profiles!meetings_user_id_to_profile_fkey (display_name)
         `)
                 .order('date', { ascending: false })
 
