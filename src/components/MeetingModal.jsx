@@ -385,9 +385,17 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
                 </button>
               </>
             ) : (
-              <button className="btn btn-secondary" onClick={onClose}>
-                Close
-              </button>
+              <>
+                <button className="btn btn-secondary" onClick={onClose}>
+                  Close
+                </button>
+                {/* Always show Save for existing meetings - user may edit minutes in view mode */}
+                {meeting && (
+                  <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </footer>
