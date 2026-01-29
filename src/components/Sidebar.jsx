@@ -3,7 +3,7 @@ import { FolderOpen, Plus, Users, ChevronRight, Hash, Settings, User } from 'luc
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-export default function Sidebar({ selectedGroupId, onSelectGroup, onCreateGroup, onManageGroup }) {
+export default function Sidebar({ selectedGroupId, onSelectGroup, onCreateGroup, onManageGroup, isOpen }) {
     const { user } = useAuth()
     const [groups, setGroups] = useState([])
     const [loading, setLoading] = useState(true)
@@ -70,7 +70,7 @@ export default function Sidebar({ selectedGroupId, onSelectGroup, onCreateGroup,
     }, [user])
 
     return (
-        <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
+        <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''} ${isOpen ? 'sidebar-open' : ''}`}>
             <div className="sidebar-header">
                 <h3 className="sidebar-title">
                     <FolderOpen size={18} />

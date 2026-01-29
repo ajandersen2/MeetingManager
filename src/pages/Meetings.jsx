@@ -8,7 +8,7 @@ import Sidebar from '../components/Sidebar'
 import GroupModal from '../components/GroupModal'
 import JoinGroupModal from '../components/JoinGroupModal'
 import InvitationsDropdown from '../components/InvitationsDropdown'
-import { Plus, LogOut, Calendar, Settings, LogIn, User } from 'lucide-react'
+import { Plus, LogOut, Calendar, Settings, LogIn, User, Menu } from 'lucide-react'
 
 export default function Meetings() {
     const { user, signOut } = useAuth()
@@ -25,6 +25,7 @@ export default function Meetings() {
     const [isJoinGroupModalOpen, setIsJoinGroupModalOpen] = useState(false)
     const [editingGroup, setEditingGroup] = useState(null)
     const [sidebarKey, setSidebarKey] = useState(0) // Force sidebar refresh
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Mobile sidebar toggle
 
     useEffect(() => {
         fetchMeetings()
@@ -205,21 +206,30 @@ export default function Meetings() {
     return (
         <div className="page-container">
             <header className="page-header">
-                <div>
-                    <h1 className="page-title">
-                        <Calendar size={32} style={{ marginRight: '12px', verticalAlign: 'middle', color: 'var(--color-primary)' }} />
-                        Meetings
-                    </h1>
-                    <p className="page-subtitle">Track and manage meeting records</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-3)' }}>
+                    <button
+                        className="mobile-menu-toggle btn btn-ghost"
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        aria-label="Toggle menu"
+                    >
+                        <Menu size={24} />
+                    </button>
+                    <div>
+                        <h1 className="page-title">
+                            <Calendar size={32} style={{ marginRight: '12px', verticalAlign: 'middle', color: 'var(--color-primary)' }} />
+                            Meetings
+                        </h1>
+                        <p className="page-subtitle">Track and manage meeting records</p>
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--spacing-3)' }}>
+                <div style={{ display: 'flex', gap: 'var(--spacing-3)', flexWrap: 'wrap' }}>
                     <button className="btn btn-secondary" onClick={() => setIsJoinGroupModalOpen(true)}>
                         <LogIn size={16} />
-                        Join Group
+                        <span className="btn-text-mobile">Join</span>
                     </button>
                     <button className="btn btn-primary" onClick={handleNewMeeting}>
                         <Plus size={18} />
-                        New Meeting
+                        <span className="btn-text-mobile">New</span>
                     </button>
                     <button
                         className="btn btn-ghost"
@@ -236,12 +246,30 @@ export default function Meetings() {
             </header>
 
             <div className="page-with-sidebar">
+                {/* Mobile sidebar overlay */}
+                {isSidebarOpen && (
+                    <div
+                        className="sidebar-overlay active"
+                        onClick={() => setIsSidebarOpen(false)}
+                    />
+                )}
+
                 <Sidebar
                     key={sidebarKey}
                     selectedGroupId={selectedGroupId}
-                    onSelectGroup={setSelectedGroupId}
-                    onCreateGroup={handleCreateGroup}
-                    onManageGroup={handleManageGroup}
+                    onSelectGroup={(groupId) => {
+                        setSelectedGroupId(groupId)
+                        setIsSidebarOpen(false) // Close sidebar on mobile after selection
+                    }}
+                    onCreateGroup={() => {
+                        handleCreateGroup()
+                        setIsSidebarOpen(false)
+                    }}
+                    onManageGroup={(group) => {
+                        handleManageGroup(group)
+                        setIsSidebarOpen(false)
+                    }}
+                    isOpen={isSidebarOpen}
                 />
 
                 <div className="main-content">
