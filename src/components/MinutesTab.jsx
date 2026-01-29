@@ -146,9 +146,9 @@ export default function MinutesTab({ content, onChange, formData }) {
     const generateWithGemini = async (apiKey) => {
         const attendeeNames = formData.attendees?.map(a => typeof a === 'object' ? a.name : a).join(', ') || 'None listed'
 
-        const prompt = `You are generating meeting minutes CONTENT ONLY for a meeting. The header information (meeting name, date, time, location, attendees) is already displayed separately in the UI, so DO NOT include or repeat any of that.
+        const prompt = `You are a professional corporate secretary generating comprehensive, detailed meeting minutes. The header information (meeting name, date, time, location, attendees) is already displayed in the UI - focus ONLY on the substantive content.
 
-CONTEXT (for your understanding, DO NOT include in output):
+MEETING CONTEXT (for your understanding, DO NOT repeat in output):
 - Meeting Name: ${formData.name || 'Board Meeting'}
 - Date: ${formatDate(formData.date) || 'Not specified'}
 - Time: ${formatTime(formData.time) || 'Not specified'}
@@ -156,25 +156,46 @@ CONTEXT (for your understanding, DO NOT include in output):
 - Objective: ${formData.objective || 'Not specified'}
 - Attendees: ${attendeeNames}
 - Agenda: ${formData.agenda_content || 'Not provided'}
-${content ? `- Current Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 1000)}` : ''}
+${content ? `- Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 2000)}` : ''}
 
-IMPORTANT: The attendee names above should help you identify who said what if there's a transcript. Try to attribute statements and action items to specific attendees when possible.
+INSTRUCTIONS:
+1. Use attendee names to attribute statements and identify who said what
+2. Be COMPREHENSIVE and DETAILED - this is official documentation
+3. Include specific quotes or paraphrases when relevant
+4. Capture nuance, concerns raised, and differing viewpoints
 
-Generate ONLY the following sections in HTML format (h3, p, ul, li tags):
-- Discussion Points (summarize key discussions, attribute to attendees if identifiable)
-- Decisions Made (if any)
-- Action Items (with assignee if identifiable from context)
-- Next Steps
+Generate the following sections in HTML format (h3 for headings, p for paragraphs, ul/li for lists):
 
-DO NOT include:
-- Meeting name/title
-- Date/time
-- Location
-- Attendees list
-- Call to Order section
-- Adjournment section
+<h3>DISCUSSION SUMMARY</h3>
+- Provide a detailed narrative of key topics discussed
+- Attribute statements to specific attendees when identifiable (e.g., "[Name] raised concerns about...")
+- Include multiple paragraphs covering each major topic
+- Note any debates, questions raised, or concerns expressed
 
-Just the substantive content of what was discussed and decided.`
+<h3>KEY DECISIONS</h3>
+- List each decision made with context
+- Note who proposed and who approved (if identifiable)
+- Include any vote counts or unanimous agreements
+- Explain the rationale behind decisions
+
+<h3>ACTION ITEMS</h3>
+For each action item, include:
+- <strong>[Assignee Name]:</strong> Specific task description
+- Due date if mentioned
+- Any dependencies or blockers noted
+- Create AT LEAST 3-5 action items based on the discussion
+
+<h3>FOLLOW-UP ITEMS</h3>
+- Topics deferred to next meeting
+- Items requiring further research or information
+- Pending decisions awaiting additional input
+
+<h3>NEXT STEPS</h3>
+- Immediate priorities before next meeting
+- Suggested agenda items for follow-up
+- Any scheduled check-ins or deadlines
+
+Be thorough and professional. These minutes serve as official record.`
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -218,36 +239,52 @@ Just the substantive content of what was discussed and decided.`
                 messages: [
                     {
                         role: 'system',
-                        content: `You are a professional meeting minutes writer. Generate ONLY the substantive content of meeting minutes in HTML format (h3, p, ul, li tags).
+                        content: `You are a professional corporate secretary generating comprehensive, detailed meeting minutes. Use HTML format (h3 for headings, p for paragraphs, ul/li for lists).
 
-The following information is ALREADY displayed in the UI header, so DO NOT include or repeat it:
-- Meeting name/title
-- Date/time
-- Location
-- Attendees list
-- Call to Order section
-- Adjournment section
+The header info (meeting name, date, time, location, attendees) is already shown in the UI - DO NOT repeat it.
 
-Generate ONLY these sections:
-- Discussion Points (summarize key discussions, attribute to specific attendees when identifiable)
-- Decisions Made (if any)
-- Action Items (with assignee if identifiable)
-- Next Steps
+Generate these sections with THOROUGH DETAIL:
 
-Use the attendee names to identify who said what when possible.`
+<h3>DISCUSSION SUMMARY</h3>
+- Detailed narrative of key topics discussed
+- Attribute statements to specific attendees (e.g., "[Name] raised concerns about...")
+- Multiple paragraphs covering each major topic
+- Note debates, questions, and concerns
+
+<h3>KEY DECISIONS</h3>
+- Each decision with full context
+- Who proposed/approved (if identifiable)
+- Vote counts or unanimous agreements
+- Rationale behind decisions
+
+<h3>ACTION ITEMS</h3>
+- <strong>[Assignee]:</strong> Specific task with due date
+- Include AT LEAST 3-5 action items
+- Note dependencies or blockers
+
+<h3>FOLLOW-UP ITEMS</h3>
+- Deferred topics
+- Items needing research
+- Pending decisions
+
+<h3>NEXT STEPS</h3>
+- Priorities before next meeting
+- Suggested follow-up agenda items
+
+Be COMPREHENSIVE and DETAILED - these are official records.`
                     },
                     {
                         role: 'user',
-                        content: `CONTEXT (for understanding, do not repeat in output):
+                        content: `MEETING CONTEXT (do not repeat in output):
 Meeting: ${formData.name}
 Date: ${formatDate(formData.date)} at ${formatTime(formData.time)}
 Location: ${formData.location || 'Not specified'}
 Objective: ${formData.objective || 'Not specified'}
 Attendees: ${attendeeNames}
 Agenda: ${formData.agenda_content || 'Not provided'}
-${content ? `Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 1500)}` : ''}
+${content ? `Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 3000)}` : ''}
 
-Generate meeting minutes content based on the above. Try to attribute statements to specific attendees if identifiable.`
+Generate comprehensive meeting minutes. Attribute statements to attendees when possible. Be thorough and detailed.`
                     }
                 ]
             })
