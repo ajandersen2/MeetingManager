@@ -2620,3 +2620,42 @@ html, body {
     display: inline;
   }
 }
+
+/* Fix mobile modal footer visibility */
+@media (max-width: 639px) {
+  .modal {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 80px !important; /* Space for fixed footer */
+  }
+  
+  .modal-footer {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 100 !important;
+    background: var(--color-white) !important;
+    border-top: 1px solid var(--color-gray-200) !important;
+    padding: var(--spacing-3) var(--spacing-4) !important;
+    padding-bottom: max(var(--spacing-4), env(safe-area-inset-bottom, 16px)) !important;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15) !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+  
+  .modal-footer-actions {
+    display: flex !important;
+    gap: var(--spacing-2) !important;
+  }
+  
+  .modal-footer-actions .btn {
+    min-width: 80px;
+  }
+}
