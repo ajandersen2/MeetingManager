@@ -3,13 +3,17 @@ import RichTextEditor from './RichTextEditor'
 import AudioRecorder from './AudioRecorder'
 import { Printer, Maximize2, Sparkles, X, Mic } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
 
 export default function MinutesTab({ content, onChange, formData }) {
     const { settings } = useSettings()
+    const { user } = useAuth()
     const [mode, setMode] = useState(content ? 'preview' : 'edit')
     const [generating, setGenerating] = useState(false)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [showRecorder, setShowRecorder] = useState(false)
+    const [storedApiKey, setStoredApiKey] = useState(null)
 
     useEffect(() => {
         const handleEsc = (e) => {
@@ -20,6 +24,26 @@ export default function MinutesTab({ content, onChange, formData }) {
         document.addEventListener('keydown', handleEsc)
         return () => document.removeEventListener('keydown', handleEsc)
     }, [isFullscreen])
+
+    // Fetch stored API key from Supabase
+    useEffect(() => {
+        const fetchApiKey = async () => {
+            if (!user) return
+            try {
+                const { data } = await supabase
+                    .from('user_api_keys')
+                    .select('openai_api_key')
+                    .eq('user_id', user.id)
+                    .single()
+                if (data?.openai_api_key) {
+                    setStoredApiKey(data.openai_api_key)
+                }
+            } catch (err) {
+                // No key stored yet
+            }
+        }
+        fetchApiKey()
+    }, [user])
 
     const formatDate = (dateStr) => {
         if (!dateStr) return ''
@@ -77,11 +101,13 @@ export default function MinutesTab({ content, onChange, formData }) {
     }
 
     const handleGenerateWithAI = async () => {
+        // Prefer stored API key, fallback to env var
+        const openaiKey = storedApiKey || import.meta.env.VITE_OPENAI_API_KEY
         const geminiKey = import.meta.env.VITE_GEMINI_API_KEY
-        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY
 
         if ((!geminiKey || geminiKey === 'your_gemini_api_key') &&
             (!openaiKey || openaiKey === 'your_openai_api_key')) {
+            alert('No API key found. Please add your OpenAI API key in Settings > Admin.')
             generateSmartTemplate()
             return
         }
@@ -89,6 +115,7 @@ export default function MinutesTab({ content, onChange, formData }) {
         setGenerating(true)
 
         try {
+            // Try Gemini first if available
             if (geminiKey && geminiKey !== 'your_gemini_api_key') {
                 const result = await generateWithGemini(geminiKey)
                 if (result) {
@@ -97,6 +124,7 @@ export default function MinutesTab({ content, onChange, formData }) {
                 }
             }
 
+            // Try OpenAI
             if (openaiKey && openaiKey !== 'your_openai_api_key') {
                 const result = await generateWithOpenAI(openaiKey)
                 if (result) {
