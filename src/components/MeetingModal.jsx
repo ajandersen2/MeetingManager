@@ -339,14 +339,7 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
     <div className="modal-backdrop" onClick={handleBackdropClick}>
       <div className="modal">
         <header className="modal-header">
-          <div>
-            <h2 className="modal-title">{formData.name || 'New Meeting'}</h2>
-            {meeting?.creator?.display_name && (
-              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-gray-500)', marginTop: '2px' }}>
-                Created by {meeting.creator.display_name}
-              </p>
-            )}
-          </div>
+          <h2 className="modal-title">{formData.name || 'New Meeting'}</h2>
           <div className="modal-header-actions">
             {meeting && !isEditing && (
               <button className="btn btn-primary btn-sm" onClick={() => setIsEditing(true)}>
