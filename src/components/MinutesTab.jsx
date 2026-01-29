@@ -144,26 +144,37 @@ export default function MinutesTab({ content, onChange, formData }) {
     }
 
     const generateWithGemini = async (apiKey) => {
-        const prompt = `Generate professional meeting minutes in HTML format for this meeting:
+        const attendeeNames = formData.attendees?.map(a => typeof a === 'object' ? a.name : a).join(', ') || 'None listed'
 
-Meeting Name: ${formData.name || 'Board Meeting'}
-Date: ${formatDate(formData.date) || 'Not specified'}
-Time: ${formatTime(formData.time) || 'Not specified'}
-Location: ${formData.location || 'Not specified'}
-Objective: ${formData.objective || 'Not specified'}
-Attendees: ${formData.attendees?.join(', ') || 'None listed'}
-Agenda: ${formData.agenda_content || 'Not provided'}
-${content ? `Current Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 500)}` : ''}
+        const prompt = `You are generating meeting minutes CONTENT ONLY for a meeting. The header information (meeting name, date, time, location, attendees) is already displayed separately in the UI, so DO NOT include or repeat any of that.
 
-Generate formal meeting minutes with these sections:
-- Call to Order
-- Attendees Present
-- Agenda Items (expand on the agenda if provided)
-- Discussion Points (infer from transcript if available)
-- Action Items
-- Adjournment
+CONTEXT (for your understanding, DO NOT include in output):
+- Meeting Name: ${formData.name || 'Board Meeting'}
+- Date: ${formatDate(formData.date) || 'Not specified'}
+- Time: ${formatTime(formData.time) || 'Not specified'}
+- Location: ${formData.location || 'Not specified'}
+- Objective: ${formData.objective || 'Not specified'}
+- Attendees: ${attendeeNames}
+- Agenda: ${formData.agenda_content || 'Not provided'}
+${content ? `- Current Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 1000)}` : ''}
 
-Use proper HTML tags (h3, p, ul, li). Make it professional and formal. Do NOT include the header/title.`
+IMPORTANT: The attendee names above should help you identify who said what if there's a transcript. Try to attribute statements and action items to specific attendees when possible.
+
+Generate ONLY the following sections in HTML format (h3, p, ul, li tags):
+- Discussion Points (summarize key discussions, attribute to attendees if identifiable)
+- Decisions Made (if any)
+- Action Items (with assignee if identifiable from context)
+- Next Steps
+
+DO NOT include:
+- Meeting name/title
+- Date/time
+- Location
+- Attendees list
+- Call to Order section
+- Adjournment section
+
+Just the substantive content of what was discussed and decided.`
 
         const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -192,6 +203,8 @@ Use proper HTML tags (h3, p, ul, li). Make it professional and formal. Do NOT in
     }
 
     const generateWithOpenAI = async (apiKey) => {
+        const attendeeNames = formData.attendees?.map(a => typeof a === 'object' ? a.name : a).join(', ') || 'None listed'
+
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -205,19 +218,36 @@ Use proper HTML tags (h3, p, ul, li). Make it professional and formal. Do NOT in
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a professional meeting minutes writer. Generate formal meeting minutes in HTML format. Use h3, p, ul, li tags. Do NOT include the header/title - just the content sections.'
+                        content: `You are a professional meeting minutes writer. Generate ONLY the substantive content of meeting minutes in HTML format (h3, p, ul, li tags).
+
+The following information is ALREADY displayed in the UI header, so DO NOT include or repeat it:
+- Meeting name/title
+- Date/time
+- Location
+- Attendees list
+- Call to Order section
+- Adjournment section
+
+Generate ONLY these sections:
+- Discussion Points (summarize key discussions, attribute to specific attendees when identifiable)
+- Decisions Made (if any)
+- Action Items (with assignee if identifiable)
+- Next Steps
+
+Use the attendee names to identify who said what when possible.`
                     },
                     {
                         role: 'user',
-                        content: `Generate meeting minutes for:
-Meeting Name: ${formData.name}
-Date: ${formatDate(formData.date)}
-Time: ${formatTime(formData.time)}
+                        content: `CONTEXT (for understanding, do not repeat in output):
+Meeting: ${formData.name}
+Date: ${formatDate(formData.date)} at ${formatTime(formData.time)}
 Location: ${formData.location || 'Not specified'}
 Objective: ${formData.objective || 'Not specified'}
-Attendees: ${formData.attendees?.join(', ') || 'None listed'}
+Attendees: ${attendeeNames}
 Agenda: ${formData.agenda_content || 'Not provided'}
-${content ? `Current Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 500)}` : ''}`
+${content ? `Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 1500)}` : ''}
+
+Generate meeting minutes content based on the above. Try to attribute statements to specific attendees if identifiable.`
                     }
                 ]
             })
@@ -229,33 +259,30 @@ ${content ? `Current Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substr
 
     const generateSmartTemplate = () => {
         const template = `
-<h3>CALL TO ORDER</h3>
-<p>The meeting was called to order at ${formatTime(formData.time) || '[TIME]'}.</p>
-
-<h3>ATTENDEES PRESENT</h3>
-<ul>
-${formData.attendees?.length > 0
-                ? formData.attendees.map(a => `  <li>${a}</li>`).join('\n')
-                : '  <li>[List attendees]</li>'}
-</ul>
-
-<h3>AGENDA ITEMS</h3>
-${formData.agenda_content
-                ? formData.agenda_content
-                : '<p>[Enter agenda items discussed]</p>'}
-
 <h3>DISCUSSION</h3>
-<p>[Summarize key discussion points]</p>
+<p>[Summarize key discussion points and who contributed]</p>
+
+${formData.agenda_content ? `<h3>AGENDA ITEMS</h3>
+${formData.agenda_content}` : ''}
+
+<h3>DECISIONS MADE</h3>
+<ul>
+  <li>[Decision 1]</li>
+  <li>[Decision 2]</li>
+</ul>
 
 <h3>ACTION ITEMS</h3>
 <ul>
-  <li><strong>[Person]:</strong> [Task] - Due: [Date]</li>
+${formData.attendees?.length > 0
+                ? formData.attendees.slice(0, 3).map(a => {
+                    const name = typeof a === 'object' ? a.name : a
+                    return `  <li><strong>${name}:</strong> [Task] - Due: [Date]</li>`
+                }).join('\n')
+                : '  <li><strong>[Person]:</strong> [Task] - Due: [Date]</li>'}
 </ul>
 
-<h3>ADJOURNMENT</h3>
-<p>The meeting was adjourned at [TIME].</p>
-
-<p><em>Minutes prepared by: [Your Name]</em></p>
+<h3>NEXT STEPS</h3>
+<p>[Outline follow-up actions and next meeting topics]</p>
 `
         onChange(template.trim())
     }
@@ -281,6 +308,11 @@ ${formData.agenda_content
                     {formData.location && (
                         <p style={{ color: 'var(--color-gray-500)', fontSize: '0.875rem' }}>
                             📍 {formData.location}
+                        </p>
+                    )}
+                    {formData.attendees?.length > 0 && (
+                        <p style={{ color: 'var(--color-gray-500)', fontSize: '0.875rem', marginTop: '8px' }}>
+                            👥 {formData.attendees.map(a => typeof a === 'object' ? a.name : a).join(', ')}
                         </p>
                     )}
                 </div>
