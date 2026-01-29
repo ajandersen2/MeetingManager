@@ -305,14 +305,14 @@ export default function SettingsModal({ isOpen, onClose }) {
                                         type="range"
                                         className="settings-slider"
                                         min="500"
-                                        max="4000"
+                                        max="16000"
                                         step="100"
                                         value={localSettings.max_tokens}
                                         onChange={handleTokensChange}
                                     />
                                     <div className="settings-range-labels">
                                         <span>500</span>
-                                        <span>4000</span>
+                                        <span>16000</span>
                                     </div>
                                     <p className="settings-hint">
                                         Controls the maximum length of AI-generated content. Higher = longer output.
