@@ -156,7 +156,7 @@ MEETING CONTEXT (for your understanding, DO NOT repeat in output):
 - Objective: ${formData.objective || 'Not specified'}
 - Attendees: ${attendeeNames}
 - Agenda: ${formData.agenda_content || 'Not provided'}
-${content ? `- Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 2000)}` : ''}
+${content ? `- Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 10000)}` : ''}
 
 INSTRUCTIONS:
 1. Use attendee names to attribute statements and identify who said what
@@ -282,7 +282,7 @@ Location: ${formData.location || 'Not specified'}
 Objective: ${formData.objective || 'Not specified'}
 Attendees: ${attendeeNames}
 Agenda: ${formData.agenda_content || 'Not provided'}
-${content ? `Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 3000)}` : ''}
+${content ? `Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 10000)}` : ''}
 
 Generate comprehensive meeting minutes. Attribute statements to attendees when possible. Be thorough and detailed.`
                     }

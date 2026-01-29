@@ -8,7 +8,7 @@ export const useSettings = () => useContext(SettingsContext)
 export const SettingsProvider = ({ children }) => {
     const [settings, setSettings] = useState({
         ai_model: 'gpt-4o-mini',
-        max_tokens: 2048,
+        max_tokens: 8192,
         temperature: 0.7
     })
     const [loading, setLoading] = useState(true)
