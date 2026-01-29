@@ -86,13 +86,14 @@ export default function MeetingList({
                             <th>Date</th>
                             <th>Time</th>
                             <th>Location</th>
+                            <th>Created By</th>
                             <th>Attendees</th>
                         </tr>
                     </thead>
                     <tbody>
                         {meetings.length === 0 ? (
                             <tr>
-                                <td colSpan="5" style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--spacing-8)' }}>
+                                <td colSpan="6" style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--spacing-8)' }}>
                                     No meetings yet. Click "New Meeting" to create one.
                                 </td>
                             </tr>
@@ -105,6 +106,9 @@ export default function MeetingList({
                                     <td>{formatDate(meeting.date)}</td>
                                     <td>{formatTime(meeting.time)}</td>
                                     <td>{meeting.location || '-'}</td>
+                                    <td style={{ color: 'var(--color-gray-500)', fontSize: 'var(--font-size-sm)' }}>
+                                        {meeting.creator?.display_name || 'Unknown'}
+                                    </td>
                                     <td className="attendees-badge">
                                         {meeting.meeting_attendees?.length || 0} attendee{meeting.meeting_attendees?.length !== 1 ? 's' : ''}
                                     </td>

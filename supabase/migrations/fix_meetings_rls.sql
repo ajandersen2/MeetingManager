@@ -5,6 +5,7 @@
 DROP POLICY IF EXISTS "Users can view meetings" ON meetings;
 DROP POLICY IF EXISTS "Users can create meetings" ON meetings;
 DROP POLICY IF EXISTS "Users can update meetings" ON meetings;
+DROP POLICY IF EXISTS "Users can delete meetings" ON meetings;
 DROP POLICY IF EXISTS "Users can delete their own meetings" ON meetings;
 DROP POLICY IF EXISTS "Users can view their own meetings" ON meetings;
 DROP POLICY IF EXISTS "Users can insert their own meetings" ON meetings;
