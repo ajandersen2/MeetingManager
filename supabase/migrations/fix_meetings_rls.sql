@@ -43,6 +43,10 @@ CREATE POLICY "Users can update meetings"
   USING (
     user_id = auth.uid() OR
     group_id IN (SELECT get_user_group_ids(auth.uid()))
+  )
+  WITH CHECK (
+    user_id = auth.uid() OR
+    group_id IN (SELECT get_user_group_ids(auth.uid()))
   );
 
 -- DELETE: Only meeting creator can delete
