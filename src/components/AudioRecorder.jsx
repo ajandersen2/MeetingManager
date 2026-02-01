@@ -129,8 +129,14 @@ export default function AudioRecorder({ onTranscriptUpdate }) {
 
     const handleInsertTranscript = () => {
         if (transcript && onTranscriptUpdate) {
-            onTranscriptUpdate(transcript)
-            setTranscript('')
+            const transcriptToInsert = transcript.trim()
+            if (transcriptToInsert) {
+                // Call callback first with the transcript value
+                onTranscriptUpdate(transcriptToInsert)
+                // Then clear the state
+                setTranscript('')
+                setRecordingTime(0)
+            }
         }
     }
 

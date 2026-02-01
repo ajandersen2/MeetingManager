@@ -98,6 +98,8 @@ export default function MinutesTab({ content, onChange, formData }) {
             ? content + '\n' + formattedTranscript
             : formattedTranscript
         onChange(newContent)
+        setMode('edit')  // Switch to edit mode so user can see the content
+        setShowRecorder(false)  // Close the recorder panel
     }
 
     const handleGenerateWithAI = async () => {
