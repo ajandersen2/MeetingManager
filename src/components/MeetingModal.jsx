@@ -27,7 +27,8 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
     objective: '',
     attendees: [],
     agenda_content: '',
-    minutes_content: ''
+    minutes_content: '',
+    raw_transcript: ''
   })
   const [saving, setSaving] = useState(false)
 
@@ -46,7 +47,8 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
           isUser: !!a.user_id
         })) || [],
         agenda_content: meeting.agenda_content || '',
-        minutes_content: meeting.minutes_content || ''
+        minutes_content: meeting.minutes_content || '',
+        raw_transcript: meeting.raw_transcript || ''
       })
       fetchAttachments()
     } else {
@@ -135,7 +137,8 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
           isUser: !!a.user_id
         })) || [],
         agenda_content: meeting.agenda_content || '',
-        minutes_content: meeting.minutes_content || ''
+        minutes_content: meeting.minutes_content || '',
+        raw_transcript: meeting.raw_transcript || ''
       })
       setIsEditing(false)
     } else {
@@ -173,6 +176,9 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
             content={formData.minutes_content}
             onChange={(content) => updateFormData('minutes_content', content)}
             formData={formData}
+            meetingId={meeting?.id}
+            rawTranscript={formData.raw_transcript}
+            onRawTranscriptChange={(content) => updateFormData('raw_transcript', content)}
           />
         </div>
       )
@@ -333,6 +339,9 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
           content={formData.minutes_content}
           onChange={(content) => updateFormData('minutes_content', content)}
           formData={formData}
+          meetingId={meeting?.id}
+          rawTranscript={formData.raw_transcript}
+          onRawTranscriptChange={(content) => updateFormData('raw_transcript', content)}
         />
       )}
       {activeTab === 'Attachments' && (

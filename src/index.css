@@ -1698,6 +1698,39 @@ a:hover {
   border: 1px solid var(--color-gray-200);
 }
 
+/* Raw Transcript Panel */
+.minutes-transcript-panel {
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3);
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid #bae6fd;
+}
+
+.transcript-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-3);
+  padding-bottom: var(--spacing-2);
+  border-bottom: 1px solid #bae6fd;
+}
+
+.transcript-panel-header h4 {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.transcript-panel-content {
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-700);
+  line-height: 1.6;
+}
+
 .btn.active {
   background: var(--color-primary-bg);
   color: var(--color-primary);

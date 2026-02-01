@@ -1,18 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
 import RichTextEditor from './RichTextEditor'
 import AudioRecorder from './AudioRecorder'
-import { Printer, Maximize2, Sparkles, X, Mic } from 'lucide-react'
+import { Printer, Maximize2, Sparkles, X, Mic, FileText } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import DOMPurify from 'dompurify'
 
-export default function MinutesTab({ content, onChange, formData }) {
+export default function MinutesTab({ content, onChange, formData, meetingId, rawTranscript, onRawTranscriptChange }) {
     const { settings } = useSettings()
     const { user } = useAuth()
     const [mode, setMode] = useState(content ? 'preview' : 'edit')
     const [generating, setGenerating] = useState(false)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [showRecorder, setShowRecorder] = useState(false)
+    const [showTranscript, setShowTranscript] = useState(false)
     const [storedApiKey, setStoredApiKey] = useState(null)
 
     useEffect(() => {
@@ -117,6 +119,20 @@ export default function MinutesTab({ content, onChange, formData }) {
         setGenerating(true)
 
         try {
+            // Save current content as raw transcript before AI generation
+            if (content && meetingId) {
+                const { error: saveError } = await supabase
+                    .from('meetings')
+                    .update({ raw_transcript: content })
+                    .eq('id', meetingId)
+
+                if (saveError) {
+                    console.error('Error saving raw transcript:', saveError)
+                } else if (onRawTranscriptChange) {
+                    onRawTranscriptChange(content)
+                }
+            }
+
             // Try Gemini first if available
             if (geminiKey && geminiKey !== 'your_gemini_api_key') {
                 const result = await generateWithGemini(geminiKey)
@@ -371,6 +387,15 @@ ${formData.attendees?.length > 0
             >
                 <Mic size={18} />
             </button>
+            {rawTranscript && (
+                <button
+                    className={`btn btn-ghost btn-icon ${showTranscript ? 'active' : ''}`}
+                    onClick={() => setShowTranscript(!showTranscript)}
+                    title="View Original Transcript"
+                >
+                    <FileText size={18} />
+                </button>
+            )}
             <button
                 className="btn btn-ghost btn-icon"
                 onClick={handleGenerateWithAI}
@@ -444,6 +469,25 @@ ${formData.attendees?.length > 0
             {showRecorder && !isFullscreen && (
                 <div className="minutes-recorder-panel">
                     <AudioRecorder onTranscriptUpdate={handleTranscriptUpdate} />
+                </div>
+            )}
+
+            {showTranscript && rawTranscript && !isFullscreen && (
+                <div className="minutes-transcript-panel">
+                    <div className="transcript-panel-header">
+                        <h4>Original Transcript</h4>
+                        <button
+                            className="btn btn-ghost btn-icon"
+                            onClick={() => setShowTranscript(false)}
+                            title="Close"
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+                    <div
+                        className="transcript-panel-content"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(rawTranscript) }}
+                    />
                 </div>
             )}
 

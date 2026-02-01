@@ -9,14 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
     "@supabase/supabase-js": "^2.39.0",
+    "@tiptap/extension-underline": "^2.2.0",
     "@tiptap/react": "^2.2.0",
     "@tiptap/starter-kit": "^2.2.0",
-    "@tiptap/extension-underline": "^2.2.0",
-    "lucide-react": "^0.316.0"
+    "dompurify": "^3.3.1",
+    "lucide-react": "^0.316.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.55",

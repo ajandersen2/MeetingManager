@@ -94,6 +94,7 @@ export default function Meetings() {
                         objective: emptyToNull(meetingData.objective),
                         agenda_content: emptyToNull(meetingData.agenda_content),
                         minutes_content: emptyToNull(meetingData.minutes_content),
+                        raw_transcript: emptyToNull(meetingData.raw_transcript),
                         group_id: meetingData.group_id || null,
                         updated_at: new Date().toISOString()
                     })
@@ -129,6 +130,7 @@ export default function Meetings() {
                         objective: emptyToNull(meetingData.objective),
                         agenda_content: emptyToNull(meetingData.agenda_content),
                         minutes_content: emptyToNull(meetingData.minutes_content),
+                        raw_transcript: emptyToNull(meetingData.raw_transcript),
                         group_id: selectedGroupId || null, // Use currently selected group
                     })
                     .select()
