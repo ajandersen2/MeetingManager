@@ -9,11 +9,11 @@ import AttachmentsTab from './AttachmentsTab'
 
 const TABS = ['Meeting', 'Agenda', 'Minutes', 'Attachments']
 
-export default function MeetingModal({ meeting, groupId, onClose, onSave, onDelete }) {
+export default function MeetingModal({ meeting, groupId, onClose, onSave, onDelete, autoStartRecording }) {
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState('Meeting')
+  const [activeTab, setActiveTab] = useState(autoStartRecording ? 'Minutes' : 'Meeting')
   const [isEditing, setIsEditing] = useState(!meeting)
-  const [expandedSection, setExpandedSection] = useState(null)
+  const [expandedSection, setExpandedSection] = useState(autoStartRecording ? 'minutes' : null)
   const [attachments, setAttachments] = useState([])
 
   // Check if current user owns this meeting
@@ -179,6 +179,7 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
             meetingId={meeting?.id}
             rawTranscript={formData.raw_transcript}
             onRawTranscriptChange={(content) => updateFormData('raw_transcript', content)}
+            autoStartRecording={autoStartRecording}
           />
         </div>
       )
@@ -342,6 +343,7 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
           meetingId={meeting?.id}
           rawTranscript={formData.raw_transcript}
           onRawTranscriptChange={(content) => updateFormData('raw_transcript', content)}
+          autoStartRecording={autoStartRecording}
         />
       )}
       {activeTab === 'Attachments' && (

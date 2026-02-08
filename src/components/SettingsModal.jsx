@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Settings, Sparkles, User, Key, Eye, EyeOff } from 'lucide-react'
+import { X, Settings, Sparkles, User, Key, Eye, EyeOff, Mic } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -28,6 +28,12 @@ export default function SettingsModal({ isOpen, onClose }) {
     const [apiKeySuccess, setApiKeySuccess] = useState(false)
     const [loadingApiKey, setLoadingApiKey] = useState(false)
 
+    // Deepgram API key state
+    const [deepgramApiKey, setDeepgramApiKey] = useState('')
+    const [showDeepgramKey, setShowDeepgramKey] = useState(false)
+    const [savingDeepgramKey, setSavingDeepgramKey] = useState(false)
+    const [deepgramKeySuccess, setDeepgramKeySuccess] = useState(false)
+
     useEffect(() => {
         if (userProfile?.display_name) {
             setDisplayName(userProfile.display_name)
@@ -48,12 +54,15 @@ export default function SettingsModal({ isOpen, onClose }) {
         try {
             const { data, error } = await supabase
                 .from('user_api_keys')
-                .select('openai_api_key')
+                .select('openai_api_key, deepgram_api_key')
                 .eq('user_id', user.id)
                 .single()
 
             if (data?.openai_api_key) {
                 setOpenaiApiKey(data.openai_api_key)
+            }
+            if (data?.deepgram_api_key) {
+                setDeepgramApiKey(data.deepgram_api_key)
             }
         } catch (err) {
             // No key exists yet, that's fine
@@ -125,6 +134,33 @@ export default function SettingsModal({ isOpen, onClose }) {
         }
 
         setSavingApiKey(false)
+    }
+
+    const handleSaveDeepgramKey = async () => {
+        setSavingDeepgramKey(true)
+        setError(null)
+        setDeepgramKeySuccess(false)
+
+        try {
+            const { error } = await supabase
+                .from('user_api_keys')
+                .upsert({
+                    user_id: user.id,
+                    deepgram_api_key: deepgramApiKey,
+                    updated_at: new Date().toISOString()
+                }, {
+                    onConflict: 'user_id'
+                })
+
+            if (error) throw error
+            setDeepgramKeySuccess(true)
+            setTimeout(() => setDeepgramKeySuccess(false), 2000)
+        } catch (err) {
+            console.error('Error saving Deepgram key:', err)
+            setError('Failed to save Deepgram API key. Please try again.')
+        }
+
+        setSavingDeepgramKey(false)
     }
 
     const handleModelChange = (e) => {
@@ -267,6 +303,53 @@ export default function SettingsModal({ isOpen, onClose }) {
                                         Your API key is stored securely and never shared. Get one from{' '}
                                         <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">
                                             OpenAI Platform
+                                        </a>.
+                                    </p>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        <Mic size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                                        Deepgram API Key
+                                    </label>
+                                    <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
+                                        <div style={{ position: 'relative', flex: 1 }}>
+                                            <input
+                                                type={showDeepgramKey ? 'text' : 'password'}
+                                                className="form-input"
+                                                value={deepgramApiKey}
+                                                onChange={(e) => setDeepgramApiKey(e.target.value)}
+                                                placeholder={loadingApiKey ? 'Loading...' : 'Enter Deepgram API key...'}
+                                                style={{ paddingRight: '40px' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                className="btn btn-ghost btn-icon"
+                                                onClick={() => setShowDeepgramKey(!showDeepgramKey)}
+                                                style={{
+                                                    position: 'absolute',
+                                                    right: '4px',
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    minWidth: '32px',
+                                                    minHeight: '32px'
+                                                }}
+                                            >
+                                                {showDeepgramKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
+                                        </div>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={handleSaveDeepgramKey}
+                                            disabled={savingDeepgramKey || !deepgramApiKey}
+                                        >
+                                            {savingDeepgramKey ? 'Saving...' : deepgramKeySuccess ? '✓ Saved' : 'Save'}
+                                        </button>
+                                    </div>
+                                    <p className="settings-hint">
+                                        Used for audio transcription. Get one from{' '}
+                                        <a href="https://console.deepgram.com/" target="_blank" rel="noopener noreferrer">
+                                            Deepgram Console
                                         </a>.
                                     </p>
                                 </div>

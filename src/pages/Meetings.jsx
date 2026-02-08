@@ -8,7 +8,8 @@ import Sidebar from '../components/Sidebar'
 import GroupModal from '../components/GroupModal'
 import JoinGroupModal from '../components/JoinGroupModal'
 import InvitationsDropdown from '../components/InvitationsDropdown'
-import { Plus, LogOut, Calendar, Settings, LogIn, User, Menu } from 'lucide-react'
+import QuickCreateModal from '../components/QuickCreateModal'
+import { Plus, LogOut, Calendar, Settings, LogIn, User, Menu, Zap } from 'lucide-react'
 
 export default function Meetings() {
     const { user, signOut } = useAuth()
@@ -26,6 +27,8 @@ export default function Meetings() {
     const [editingGroup, setEditingGroup] = useState(null)
     const [sidebarKey, setSidebarKey] = useState(0) // Force sidebar refresh
     const [isSidebarOpen, setIsSidebarOpen] = useState(false) // Mobile sidebar toggle
+    const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false)
+    const [autoStartRecording, setAutoStartRecording] = useState(false)
 
     useEffect(() => {
         fetchMeetings()
@@ -63,6 +66,7 @@ export default function Meetings() {
     }
 
     const handleNewMeeting = () => {
+        setAutoStartRecording(false)
         setSelectedMeeting(null)
         setIsModalOpen(true)
     }
@@ -75,6 +79,73 @@ export default function Meetings() {
     const handleCloseModal = () => {
         setIsModalOpen(false)
         setSelectedMeeting(null)
+        setAutoStartRecording(false)
+    }
+
+    const handleQuickCreate = async (meetingData) => {
+        try {
+            // Create the meeting immediately
+            const { data: newMeeting, error } = await supabase
+                .from('meetings')
+                .insert({
+                    user_id: user.id,
+                    name: meetingData.name,
+                    date: emptyToNull(meetingData.date),
+                    time: emptyToNull(meetingData.time),
+                    location: emptyToNull(meetingData.location),
+                    objective: emptyToNull(meetingData.objective),
+                    agenda_content: emptyToNull(meetingData.agenda_content),
+                    minutes_content: emptyToNull(meetingData.minutes_content),
+                    raw_transcript: emptyToNull(meetingData.raw_transcript),
+                    group_id: selectedGroupId || null,
+                })
+                .select(`
+                    *,
+                    meeting_attendees (id, name, user_id),
+                    creator:user_profiles!meetings_user_id_to_profile_fkey (display_name)
+                `)
+                .single()
+
+            if (error) throw error
+
+            // Add attendees if any
+            if (meetingData.attendees?.length > 0) {
+                await supabase
+                    .from('meeting_attendees')
+                    .insert(meetingData.attendees.map(att => ({
+                        meeting_id: newMeeting.id,
+                        name: typeof att === 'string' ? att : att.name,
+                        user_id: typeof att === 'string' ? null : (att.user_id || null)
+                    })))
+
+                // Re-fetch the meeting with attendees
+                const { data: refreshed } = await supabase
+                    .from('meetings')
+                    .select(`
+                        *,
+                        meeting_attendees (id, name, user_id),
+                        creator:user_profiles!meetings_user_id_to_profile_fkey (display_name)
+                    `)
+                    .eq('id', newMeeting.id)
+                    .single()
+
+                if (refreshed) {
+                    setSelectedMeeting(refreshed)
+                } else {
+                    setSelectedMeeting(newMeeting)
+                }
+            } else {
+                setSelectedMeeting(newMeeting)
+            }
+
+            // Open the meeting modal for recording
+            setAutoStartRecording(true)
+            setIsModalOpen(true)
+            await fetchMeetings()
+        } catch (error) {
+            console.error('Error creating quick meeting:', error)
+            alert('Failed to create meeting. Please try again.')
+        }
     }
 
     // Helper to convert empty strings to null for database
@@ -230,6 +301,10 @@ export default function Meetings() {
                         <LogIn size={16} />
                         <span className="btn-text-mobile">Join</span>
                     </button>
+                    <button className="btn btn-warning" onClick={() => setIsQuickCreateOpen(true)} title="Quick Meeting">
+                        <Zap size={18} />
+                        <span className="btn-text-mobile">Quick</span>
+                    </button>
                     <button className="btn btn-primary" onClick={handleNewMeeting}>
                         <Plus size={18} />
                         <span className="btn-text-mobile">New</span>
@@ -295,8 +370,16 @@ export default function Meetings() {
                     onClose={handleCloseModal}
                     onSave={handleSaveMeeting}
                     onDelete={handleDeleteMeeting}
+                    autoStartRecording={autoStartRecording}
                 />
             )}
+
+            <QuickCreateModal
+                isOpen={isQuickCreateOpen}
+                onClose={() => setIsQuickCreateOpen(false)}
+                onCreateMeeting={handleQuickCreate}
+                selectedGroupId={selectedGroupId}
+            />
 
             <SettingsModal
                 isOpen={isSettingsOpen}

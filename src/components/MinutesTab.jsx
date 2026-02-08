@@ -7,15 +7,16 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import DOMPurify from 'dompurify'
 
-export default function MinutesTab({ content, onChange, formData, meetingId, rawTranscript, onRawTranscriptChange }) {
+export default function MinutesTab({ content, onChange, formData, meetingId, rawTranscript, onRawTranscriptChange, autoStartRecording }) {
     const { settings } = useSettings()
     const { user } = useAuth()
     const [mode, setMode] = useState(content ? 'preview' : 'edit')
     const [generating, setGenerating] = useState(false)
     const [isFullscreen, setIsFullscreen] = useState(false)
-    const [showRecorder, setShowRecorder] = useState(false)
+    const [showRecorder, setShowRecorder] = useState(autoStartRecording || false)
     const [showTranscript, setShowTranscript] = useState(false)
     const [storedApiKey, setStoredApiKey] = useState(null)
+    const [isCurrentlyRecording, setIsCurrentlyRecording] = useState(false)
 
     useEffect(() => {
         const handleEsc = (e) => {
@@ -94,14 +95,30 @@ export default function MinutesTab({ content, onChange, formData, meetingId, raw
         printWindow.print()
     }
 
-    const handleTranscriptUpdate = (transcript) => {
-        const formattedTranscript = `<h3>Recording Transcript</h3><p>${transcript}</p>`
+    const handleTranscriptReady = (transcript, speakerCount) => {
+        // Format the transcript as HTML
+        let formattedHtml = '<h3>Meeting Transcript</h3>'
+        
+        if (speakerCount > 0) {
+            formattedHtml += `<p><em>${speakerCount} speaker${speakerCount !== 1 ? 's' : ''} detected</em></p>`
+        }
+
+        // Convert plain text with Speaker labels to HTML
+        const lines = transcript.split('\n\n')
+        for (const line of lines) {
+            const speakerMatch = line.match(/^Speaker (\d+): (.+)/)
+            if (speakerMatch) {
+                formattedHtml += `<p><strong>Speaker ${speakerMatch[1]}:</strong> ${speakerMatch[2]}</p>`
+            } else if (line.trim()) {
+                formattedHtml += `<p>${line.trim()}</p>`
+            }
+        }
+
         const newContent = content
-            ? content + '\n' + formattedTranscript
-            : formattedTranscript
+            ? content + '\n' + formattedHtml
+            : formattedHtml
         onChange(newContent)
-        setMode('edit')  // Switch to edit mode so user can see the content
-        setShowRecorder(false)  // Close the recorder panel
+        setMode('edit')
     }
 
     const handleGenerateWithAI = async () => {
@@ -381,7 +398,7 @@ ${formData.attendees?.length > 0
     const renderToolbar = (showClose = false) => (
         <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center' }}>
             <button
-                className={`btn btn-ghost btn-icon ${showRecorder ? 'active' : ''}`}
+                className={`btn btn-ghost btn-icon ${showRecorder ? 'active' : ''} ${isCurrentlyRecording ? 'recording-active' : ''}`}
                 onClick={() => setShowRecorder(!showRecorder)}
                 title="Record & Transcribe"
             >
@@ -450,7 +467,11 @@ ${formData.attendees?.length > 0
                         </div>
                         {showRecorder && (
                             <div className="minutes-recorder-panel">
-                                <AudioRecorder onTranscriptUpdate={handleTranscriptUpdate} />
+                                <AudioRecorder
+                                    meetingId={meetingId}
+                                    onTranscriptReady={handleTranscriptReady}
+                                    onRecordingStateChange={setIsCurrentlyRecording}
+                                />
                             </div>
                         )}
                         <div className="minutes-fullscreen-content">
@@ -468,7 +489,11 @@ ${formData.attendees?.length > 0
 
             {showRecorder && !isFullscreen && (
                 <div className="minutes-recorder-panel">
-                    <AudioRecorder onTranscriptUpdate={handleTranscriptUpdate} />
+                    <AudioRecorder
+                        meetingId={meetingId}
+                        onTranscriptReady={handleTranscriptReady}
+                        onRecordingStateChange={setIsCurrentlyRecording}
+                    />
                 </div>
             )}
 
