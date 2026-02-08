@@ -216,10 +216,12 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
             if (!session) throw new Error('Not authenticated')
 
             const projectUrl = import.meta.env.VITE_SUPABASE_URL
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
             const response = await fetch(`${projectUrl}/functions/v1/deepgram-transcribe`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${session.access_token}`,
+                    'apikey': anonKey,
                     'Content-Type': 'audio/webm',
                     'x-deepgram-key': deepgramKey,
                 },
