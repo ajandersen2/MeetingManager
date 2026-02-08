@@ -117,6 +117,31 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
     }
   }
 
+  const handleTranscriptFromAttachment = (transcript, speakerCount) => {
+    // Format the transcript as HTML (same pattern as MinutesTab)
+    let formattedHtml = '<h3>Meeting Transcript</h3>'
+    if (speakerCount > 0) {
+      formattedHtml += `<p><em>${speakerCount} speaker${speakerCount !== 1 ? 's' : ''} detected</em></p>`
+    }
+    const lines = transcript.split('\n\n')
+    for (const line of lines) {
+      const speakerMatch = line.match(/^Speaker (\d+): (.+)/)
+      if (speakerMatch) {
+        formattedHtml += `<p><strong>Speaker ${speakerMatch[1]}:</strong> ${speakerMatch[2]}</p>`
+      } else if (line.trim()) {
+        formattedHtml += `<p>${line.trim()}</p>`
+      }
+    }
+    const currentMinutes = formData.minutes_content
+    updateFormData('minutes_content', currentMinutes ? currentMinutes + '\n' + formattedHtml : formattedHtml)
+    // Switch to minutes view
+    if (!isEditing) {
+      setExpandedSection('minutes')
+    } else {
+      setActiveTab('Minutes')
+    }
+  }
+
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
       onClose()
@@ -289,7 +314,7 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
         {/* Attachments expanded */}
         {expandedSection === 'attachments' && (
           <div className="meeting-expanded-section">
-            <AttachmentsTab meetingId={meeting?.id} />
+            <AttachmentsTab meetingId={meeting?.id} onTranscriptReady={handleTranscriptFromAttachment} />
           </div>
         )}
       </div>
@@ -347,7 +372,7 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
         />
       )}
       {activeTab === 'Attachments' && (
-        <AttachmentsTab meetingId={meeting?.id} />
+        <AttachmentsTab meetingId={meeting?.id} onTranscriptReady={handleTranscriptFromAttachment} />
       )}
     </>
   )

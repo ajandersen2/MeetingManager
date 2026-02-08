@@ -1,13 +1,106 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { Upload, File, Trash2, Download } from 'lucide-react'
+import { Upload, File, Trash2, Download, FileAudio, Loader2 } from 'lucide-react'
 
-export default function AttachmentsTab({ meetingId }) {
+const AUDIO_EXTENSIONS = ['.webm', '.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac']
+
+function isAudioFile(fileName) {
+    const lower = fileName.toLowerCase()
+    return AUDIO_EXTENSIONS.some(ext => lower.endsWith(ext))
+}
+
+export default function AttachmentsTab({ meetingId, onTranscriptReady }) {
     const [attachments, setAttachments] = useState([])
     const [uploading, setUploading] = useState(false)
     const [loading, setLoading] = useState(true)
     const [dragOver, setDragOver] = useState(false)
+    const [deepgramKey, setDeepgramKey] = useState(null)
+    const [transcribingId, setTranscribingId] = useState(null)
+    const [transcribeError, setTranscribeError] = useState(null)
     const fileInputRef = useRef(null)
+
+    // Load Deepgram API key
+    useEffect(() => {
+        const loadKey = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user) return
+                const { data } = await supabase
+                    .from('user_api_keys')
+                    .select('deepgram_api_key')
+                    .eq('user_id', user.id)
+                    .single()
+                if (data?.deepgram_api_key) {
+                    setDeepgramKey(data.deepgram_api_key)
+                }
+            } catch (err) {
+                // No key stored yet
+            }
+        }
+        loadKey()
+    }, [])
+
+    const handleTranscribe = async (attachment) => {
+        if (!deepgramKey) {
+            setTranscribeError('No Deepgram API key found. Add it in Settings > Admin.')
+            return
+        }
+        if (!onTranscriptReady) return
+
+        setTranscribingId(attachment.id)
+        setTranscribeError(null)
+
+        try {
+            // Download the audio file from storage
+            const { data: audioData, error: downloadError } = await supabase.storage
+                .from('meeting-attachments')
+                .download(attachment.file_path)
+
+            if (downloadError) throw downloadError
+
+            // Determine content type from extension
+            const ext = attachment.file_name.toLowerCase().split('.').pop()
+            const mimeTypes = {
+                webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav',
+                m4a: 'audio/mp4', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac'
+            }
+            const contentType = mimeTypes[ext] || 'audio/webm'
+
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!session) throw new Error('Not authenticated')
+
+            const projectUrl = import.meta.env.VITE_SUPABASE_URL
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+            const response = await fetch(`${projectUrl}/functions/v1/deepgram-transcribe`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'apikey': anonKey,
+                    'Content-Type': contentType,
+                    'x-deepgram-key': deepgramKey,
+                },
+                body: audioData,
+            })
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}))
+                throw new Error(errData.error || `Transcription failed (${response.status})`)
+            }
+
+            const result = await response.json()
+
+            if (result.transcript) {
+                onTranscriptReady(result.transcript, result.speakers || 0)
+            } else {
+                setTranscribeError('No transcript returned. The audio may be too short or unclear.')
+            }
+        } catch (err) {
+            console.error('Transcription error:', err)
+            setTranscribeError(err.message || 'Transcription failed. Please try again.')
+        } finally {
+            setTranscribingId(null)
+        }
+    }
 
     useEffect(() => {
         if (meetingId) {
@@ -199,13 +292,32 @@ export default function AttachmentsTab({ meetingId }) {
                     {attachments.map(attachment => (
                         <div key={attachment.id} className="attachment-item">
                             <div className="attachment-info">
-                                <File size={20} style={{ color: 'var(--color-gray-400)' }} />
+                                {isAudioFile(attachment.file_name) ? (
+                                    <FileAudio size={20} style={{ color: 'var(--color-primary)' }} />
+                                ) : (
+                                    <File size={20} style={{ color: 'var(--color-gray-400)' }} />
+                                )}
                                 <div>
                                     <div className="attachment-name">{attachment.file_name}</div>
                                     <div className="attachment-size">{formatFileSize(attachment.file_size)}</div>
                                 </div>
                             </div>
                             <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
+                                {isAudioFile(attachment.file_name) && onTranscriptReady && deepgramKey && (
+                                    <button
+                                        className="btn btn-ghost btn-icon"
+                                        onClick={() => handleTranscribe(attachment)}
+                                        disabled={transcribingId !== null}
+                                        title="Transcribe audio"
+                                        style={{ color: 'var(--color-primary)' }}
+                                    >
+                                        {transcribingId === attachment.id ? (
+                                            <Loader2 size={16} className="spinning" />
+                                        ) : (
+                                            <FileAudio size={16} />
+                                        )}
+                                    </button>
+                                )}
                                 <button
                                     className="btn btn-ghost btn-icon"
                                     onClick={() => handleDownload(attachment)}
@@ -228,6 +340,12 @@ export default function AttachmentsTab({ meetingId }) {
             ) : (
                 <div className="empty-state">
                     No attachments yet.
+                </div>
+            )}
+
+            {transcribeError && (
+                <div className="audio-recorder-error" style={{ marginTop: 'var(--spacing-3)' }}>
+                    {transcribeError}
                 </div>
             )}
         </div>
