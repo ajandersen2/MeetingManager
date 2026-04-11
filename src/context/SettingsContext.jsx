@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 
 const SettingsContext = createContext({})
 
@@ -19,15 +19,7 @@ export const SettingsProvider = ({ children }) => {
 
     const fetchSettings = async () => {
         try {
-            const { data, error } = await supabase
-                .from('app_settings')
-                .select('*')
-                .single()
-
-            if (error && error.code !== 'PGRST116') {
-                console.error('Error fetching settings:', error)
-            }
-
+            const data = await api.get('/api/settings')
             if (data) {
                 setSettings({
                     ai_model: data.ai_model,
@@ -44,16 +36,7 @@ export const SettingsProvider = ({ children }) => {
 
     const updateSettings = async (newSettings) => {
         try {
-            const { error } = await supabase
-                .from('app_settings')
-                .update({
-                    ...newSettings,
-                    updated_at: new Date().toISOString()
-                })
-                .not('id', 'is', null) // Update the single row
-
-            if (error) throw error
-
+            await api.put('/api/settings', newSettings)
             setSettings(prev => ({ ...prev, ...newSettings }))
             return { success: true }
         } catch (error) {

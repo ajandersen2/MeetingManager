@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Zap, X, MapPin, Clock, Users, Loader2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 
 export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, selectedGroupId }) {
@@ -14,7 +14,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
     const [loading, setLoading] = useState(true)
     const [creating, setCreating] = useState(false)
 
-    // Load frequent titles when modal opens
     useEffect(() => {
         if (isOpen) {
             loadFrequentTitles()
@@ -22,7 +21,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
         }
     }, [isOpen])
 
-    // Load attendees when title changes
     useEffect(() => {
         if (selectedTitle) {
             loadAttendeesForTitle(selectedTitle)
@@ -34,19 +32,10 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
     const loadFrequentTitles = async () => {
         setLoading(true)
         try {
-            // Get all meetings for this user, count by name
-            let query = supabase
-                .from('meetings')
-                .select('name')
-                .order('created_at', { ascending: false })
-
-            if (selectedGroupId) {
-                query = query.eq('group_id', selectedGroupId)
-            }
-
-            const { data, error } = await query
-
-            if (error) throw error
+            const url = selectedGroupId
+                ? `/api/meetings?group_id=${selectedGroupId}`
+                : '/api/meetings'
+            const data = await api.get(url)
 
             // Count occurrences and rank
             const titleCounts = {}
@@ -57,7 +46,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
                 }
             }
 
-            // Sort by frequency, take top 10
             const sorted = Object.entries(titleCounts)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 10)
@@ -65,7 +53,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
 
             setFrequentTitles(sorted)
 
-            // Auto-select most frequent if available
             if (sorted.length > 0) {
                 setSelectedTitle(sorted[0].name)
             }
@@ -78,24 +65,15 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
 
     const loadAttendeesForTitle = async (title) => {
         try {
-            // Get the most recent meeting with this title
-            let query = supabase
-                .from('meetings')
-                .select('id, meeting_attendees(name, user_id)')
-                .eq('name', title)
-                .order('date', { ascending: false })
-                .limit(1)
+            const url = selectedGroupId
+                ? `/api/meetings?group_id=${selectedGroupId}`
+                : '/api/meetings'
+            const data = await api.get(url)
 
-            if (selectedGroupId) {
-                query = query.eq('group_id', selectedGroupId)
-            }
-
-            const { data, error } = await query
-
-            if (error) throw error
-
-            if (data?.[0]?.meeting_attendees?.length > 0) {
-                setAttendees(data[0].meeting_attendees.map(a => ({
+            // Find most recent meeting with this title
+            const match = data?.find(m => m.name === title)
+            if (match?.meeting_attendees?.length > 0) {
+                setAttendees(match.meeting_attendees.map(a => ({
                     name: a.name,
                     user_id: a.user_id || null,
                     isUser: !!a.user_id
@@ -115,7 +93,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 try {
-                    // Reverse geocode using a free API
                     const { latitude, longitude } = position.coords
                     const response = await fetch(
                         `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`,
@@ -178,7 +155,7 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
             agenda_content: '',
             minutes_content: '',
             raw_transcript: '',
-            quickCreate: true, // Flag to auto-start recording
+            quickCreate: true,
         }
 
         await onCreateMeeting(meetingData)
@@ -226,7 +203,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
                         </div>
                     ) : (
                         <>
-                            {/* Auto-filled info banner */}
                             <div className="quick-create-info">
                                 <div className="quick-create-info-item">
                                     <Clock size={14} />
@@ -250,7 +226,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
                                 </div>
                             </div>
 
-                            {/* Title selection */}
                             <div className="form-group">
                                 <label className="form-label">Meeting Title</label>
                                 {frequentTitles.length > 0 ? (
@@ -284,7 +259,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
                                 />
                             </div>
 
-                            {/* Auto-populated attendees */}
                             {attendees.length > 0 && (
                                 <div className="form-group">
                                     <label className="form-label">
@@ -301,7 +275,6 @@ export default function QuickCreateModal({ isOpen, onClose, onCreateMeeting, sel
                                 </div>
                             )}
 
-                            {/* What will happen */}
                             <div className="quick-create-note">
                                 <Zap size={14} />
                                 <span>Meeting will be created and <strong>recording will start automatically</strong></span>

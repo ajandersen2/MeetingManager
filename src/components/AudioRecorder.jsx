@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Mic, Square, Loader2, AlertCircle, Upload, Play, Pause, FileAudio } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 
 export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordingStateChange }) {
     const [isRecording, setIsRecording] = useState(false)
@@ -24,13 +24,7 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
     useEffect(() => {
         const loadKey = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
-                if (!user) return
-                const { data } = await supabase
-                    .from('user_api_keys')
-                    .select('deepgram_api_key')
-                    .eq('user_id', user.id)
-                    .single()
+                const data = await api.get('/api/api-keys')
                 if (data?.deepgram_api_key) {
                     setDeepgramKey(data.deepgram_api_key)
                 }
@@ -80,7 +74,6 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
                 const url = URL.createObjectURL(blob)
                 setAudioUrl(url)
 
-                // Stop tracks
                 stream.getTracks().forEach(track => track.stop())
                 streamRef.current = null
             }
@@ -90,13 +83,11 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
                 setError('Recording error occurred. Please try again.')
             }
 
-            // Collect chunks every 1 second for reliability
             mediaRecorder.start(1000)
             mediaRecorderRef.current = mediaRecorder
             setIsRecording(true)
             onRecordingStateChange?.(true)
 
-            // Start timer
             setRecordingTime(0)
             timerRef.current = setInterval(() => {
                 setRecordingTime(t => t + 1)
@@ -127,7 +118,6 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
         onRecordingStateChange?.(false)
     }, [onRecordingStateChange])
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -170,27 +160,8 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
         try {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
             const fileName = `recording-${timestamp}.webm`
-            const filePath = `${meetingId}/${Date.now()}_${fileName}`
-
-            // Upload to Supabase storage
-            const { error: uploadError } = await supabase.storage
-                .from('meeting-attachments')
-                .upload(filePath, audioBlob, { contentType: 'audio/webm' })
-
-            if (uploadError) throw uploadError
-
-            // Save to meeting_attachments table
-            const { error: dbError } = await supabase
-                .from('meeting_attachments')
-                .insert({
-                    meeting_id: meetingId,
-                    file_name: fileName,
-                    file_path: filePath,
-                    file_size: audioBlob.size
-                })
-
-            if (dbError) throw dbError
-
+            const file = new File([audioBlob], fileName, { type: 'audio/webm' })
+            await api.upload(`/api/meetings/${meetingId}/attachments`, file)
             setSaved(true)
         } catch (err) {
             console.error('Error saving recording:', err)
@@ -212,28 +183,7 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
         setError(null)
 
         try {
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!session) throw new Error('Not authenticated')
-
-            const projectUrl = import.meta.env.VITE_SUPABASE_URL
-            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-            const response = await fetch(`${projectUrl}/functions/v1/deepgram-transcribe`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${session.access_token}`,
-                    'apikey': anonKey,
-                    'Content-Type': 'audio/webm',
-                    'x-deepgram-key': deepgramKey,
-                },
-                body: audioBlob,
-            })
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}))
-                throw new Error(errData.error || `Transcription failed (${response.status})`)
-            }
-
-            const result = await response.json()
+            const result = await api.uploadBlob('/api/transcribe', audioBlob, 'recording.webm', 'audio/webm')
 
             if (result.transcript) {
                 onTranscriptReady?.(result.transcript, result.speakers || 0)
@@ -280,7 +230,6 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
                 )}
             </div>
 
-            {/* Recording controls */}
             {!audioBlob && (
                 <div className="audio-recorder-controls">
                     {!isRecording ? (
@@ -305,7 +254,6 @@ export default function AudioRecorder({ meetingId, onTranscriptReady, onRecordin
                 </div>
             )}
 
-            {/* Audio playback and actions */}
             {audioBlob && (
                 <div className="audio-recorder-result">
                     <div className="audio-playback-row">

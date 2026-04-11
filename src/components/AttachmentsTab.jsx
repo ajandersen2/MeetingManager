@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import { Upload, File, Trash2, Download, FileAudio, Loader2 } from 'lucide-react'
 
 const AUDIO_EXTENSIONS = ['.webm', '.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac']
@@ -23,13 +23,7 @@ export default function AttachmentsTab({ meetingId, onTranscriptReady }) {
     useEffect(() => {
         const loadKey = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
-                if (!user) return
-                const { data } = await supabase
-                    .from('user_api_keys')
-                    .select('deepgram_api_key')
-                    .eq('user_id', user.id)
-                    .single()
+                const data = await api.get('/api/api-keys')
                 if (data?.deepgram_api_key) {
                     setDeepgramKey(data.deepgram_api_key)
                 }
@@ -51,43 +45,11 @@ export default function AttachmentsTab({ meetingId, onTranscriptReady }) {
         setTranscribeError(null)
 
         try {
-            // Download the audio file from storage
-            const { data: audioData, error: downloadError } = await supabase.storage
-                .from('meeting-attachments')
-                .download(attachment.file_path)
+            // Download the audio file
+            const blob = await api.download(`/api/attachments/${attachment.id}/download`)
 
-            if (downloadError) throw downloadError
-
-            // Determine content type from extension
-            const ext = attachment.file_name.toLowerCase().split('.').pop()
-            const mimeTypes = {
-                webm: 'audio/webm', mp3: 'audio/mpeg', wav: 'audio/wav',
-                m4a: 'audio/mp4', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac'
-            }
-            const contentType = mimeTypes[ext] || 'audio/webm'
-
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!session) throw new Error('Not authenticated')
-
-            const projectUrl = import.meta.env.VITE_SUPABASE_URL
-            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-            const response = await fetch(`${projectUrl}/functions/v1/deepgram-transcribe`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${session.access_token}`,
-                    'apikey': anonKey,
-                    'Content-Type': contentType,
-                    'x-deepgram-key': deepgramKey,
-                },
-                body: audioData,
-            })
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}))
-                throw new Error(errData.error || `Transcription failed (${response.status})`)
-            }
-
-            const result = await response.json()
+            // Send for transcription
+            const result = await api.uploadBlob('/api/transcribe', blob, attachment.file_name, 'audio/webm')
 
             if (result.transcript) {
                 onTranscriptReady(result.transcript, result.speakers || 0)
@@ -112,13 +74,7 @@ export default function AttachmentsTab({ meetingId, onTranscriptReady }) {
 
     const fetchAttachments = async () => {
         try {
-            const { data, error } = await supabase
-                .from('meeting_attachments')
-                .select('*')
-                .eq('meeting_id', meetingId)
-                .order('uploaded_at', { ascending: false })
-
-            if (error) throw error
+            const data = await api.get(`/api/meetings/${meetingId}/attachments`)
             setAttachments(data || [])
         } catch (error) {
             console.error('Error fetching attachments:', error)
@@ -143,26 +99,7 @@ export default function AttachmentsTab({ meetingId, onTranscriptReady }) {
 
         for (const file of files) {
             try {
-                const filePath = `${meetingId}/${Date.now()}_${file.name}`
-
-                // Upload to storage
-                const { error: uploadError } = await supabase.storage
-                    .from('meeting-attachments')
-                    .upload(filePath, file)
-
-                if (uploadError) throw uploadError
-
-                // Save to database
-                const { error: dbError } = await supabase
-                    .from('meeting_attachments')
-                    .insert({
-                        meeting_id: meetingId,
-                        file_name: file.name,
-                        file_path: filePath,
-                        file_size: file.size
-                    })
-
-                if (dbError) throw dbError
+                await api.upload(`/api/meetings/${meetingId}/attachments`, file)
             } catch (error) {
                 console.error('Error uploading file:', error)
                 alert(`Failed to upload ${file.name}`)
@@ -177,18 +114,7 @@ export default function AttachmentsTab({ meetingId, onTranscriptReady }) {
         if (!confirm(`Delete ${attachment.file_name}?`)) return
 
         try {
-            // Delete from storage
-            await supabase.storage
-                .from('meeting-attachments')
-                .remove([attachment.file_path])
-
-            // Delete from database
-            const { error } = await supabase
-                .from('meeting_attachments')
-                .delete()
-                .eq('id', attachment.id)
-
-            if (error) throw error
+            await api.delete(`/api/attachments/${attachment.id}`)
             await fetchAttachments()
         } catch (error) {
             console.error('Error deleting attachment:', error)
@@ -198,13 +124,8 @@ export default function AttachmentsTab({ meetingId, onTranscriptReady }) {
 
     const handleDownload = async (attachment) => {
         try {
-            const { data, error } = await supabase.storage
-                .from('meeting-attachments')
-                .download(attachment.file_path)
-
-            if (error) throw error
-
-            const url = URL.createObjectURL(data)
+            const blob = await api.download(`/api/attachments/${attachment.id}/download`)
+            const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
             a.download = attachment.file_name

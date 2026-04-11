@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Share2, Trash2, Edit3, Calendar, Clock, MapPin, Target, Users, FileText, Mic, Paperclip, UserCheck, User } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import MeetingTab from './MeetingTab'
 import AgendaTab from './AgendaTab'
@@ -34,9 +34,11 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
 
   useEffect(() => {
     if (meeting) {
+      // Normalize date: pg driver returns Date objects that serialize as ISO timestamps
+      const normalizedDate = meeting.date ? meeting.date.substring(0, 10) : ''
       setFormData({
         name: meeting.name || '',
-        date: meeting.date || '',
+        date: normalizedDate,
         time: meeting.time || '',
         location: meeting.location || '',
         objective: meeting.objective || '',
@@ -60,12 +62,8 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
   const fetchAttachments = async () => {
     if (!meeting?.id) return
     try {
-      const { data, error } = await supabase
-        .from('meeting_attachments')
-        .select('*')
-        .eq('meeting_id', meeting.id)
-        .order('uploaded_at', { ascending: false })
-      if (!error) setAttachments(data || [])
+      const data = await api.get(`/api/meetings/${meeting.id}/attachments`)
+      setAttachments(data || [])
     } catch (error) {
       console.error('Error fetching attachments:', error)
     }
@@ -77,7 +75,9 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Not set'
-    const date = new Date(dateStr + 'T00:00:00')
+    // Handle both YYYY-MM-DD and full ISO timestamp formats
+    const normalized = dateStr.substring(0, 10)
+    const date = new Date(normalized + 'T00:00:00')
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
   }
 
@@ -150,9 +150,10 @@ export default function MeetingModal({ meeting, groupId, onClose, onSave, onDele
 
   const handleCancelEdit = () => {
     if (meeting) {
+      const normalizedDate = meeting.date ? meeting.date.substring(0, 10) : ''
       setFormData({
         name: meeting.name || '',
-        date: meeting.date || '',
+        date: normalizedDate,
         time: meeting.time || '',
         location: meeting.location || '',
         objective: meeting.objective || '',

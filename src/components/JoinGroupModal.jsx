@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { X, Hash, LogIn } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { api } from '../lib/api'
 
 export default function JoinGroupModal({ isOpen, onClose, onJoined }) {
-    const { user } = useAuth()
     const [joinCode, setJoinCode] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
@@ -19,44 +17,7 @@ export default function JoinGroupModal({ isOpen, onClose, onJoined }) {
         setError('')
 
         try {
-            // Find the group by join code
-            const { data: group, error: findError } = await supabase
-                .from('meeting_groups')
-                .select('id, name')
-                .eq('join_code', joinCode.toUpperCase().trim())
-                .single()
-
-            if (findError || !group) {
-                setError('Invalid join code. Please check and try again.')
-                setLoading(false)
-                return
-            }
-
-            // Check if already a member
-            const { data: existing } = await supabase
-                .from('group_members')
-                .select('id')
-                .eq('group_id', group.id)
-                .eq('user_id', user.id)
-                .single()
-
-            if (existing) {
-                setError('You are already a member of this group')
-                setLoading(false)
-                return
-            }
-
-            // Join the group
-            const { error: joinError } = await supabase
-                .from('group_members')
-                .insert({
-                    group_id: group.id,
-                    user_id: user.id,
-                    role: 'member'
-                })
-
-            if (joinError) throw joinError
-
+            const group = await api.post('/api/groups/join', { joinCode: joinCode.trim() })
             onJoined?.(group)
             onClose()
         } catch (err) {

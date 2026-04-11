@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
-import { Calendar, AlertTriangle, User } from 'lucide-react'
+import { Calendar, User } from 'lucide-react'
 
 export default function Login() {
     const [isSignUp, setIsSignUp] = useState(false)
@@ -12,15 +11,13 @@ export default function Login() {
     const [displayName, setDisplayName] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
-    const [message, setMessage] = useState('')
 
-    const { signIn, signUp, configError } = useAuth()
+    const { signIn, signUp } = useAuth()
     const navigate = useNavigate()
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
-        setMessage('')
 
         if (isSignUp && password !== confirmPassword) {
             setError('Passwords do not match')
@@ -36,22 +33,9 @@ export default function Login() {
 
         try {
             if (isSignUp) {
-                const { data, error } = await signUp(email, password)
+                const { error } = await signUp(email, password, displayName.trim())
                 if (error) throw error
-
-                // If signup succeeded and we have a user, update their profile with display_name
-                // Note: Profile will be created by trigger, we just need to update display_name
-                if (data?.user) {
-                    // Wait a moment for the trigger to create the profile
-                    setTimeout(async () => {
-                        await supabase
-                            .from('user_profiles')
-                            .update({ display_name: displayName.trim() })
-                            .eq('user_id', data.user.id)
-                    }, 1000)
-                }
-
-                setMessage('Check your email for the confirmation link!')
+                navigate('/')
             } else {
                 const { error } = await signIn(email, password)
                 if (error) throw error
@@ -76,52 +60,18 @@ export default function Login() {
                 </div>
 
                 <div className="login-card">
-                    {configError && (
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: 'var(--spacing-3)',
-                            padding: 'var(--spacing-4)',
-                            background: 'var(--color-danger-bg)',
-                            borderRadius: 'var(--radius-md)',
-                            marginBottom: 'var(--spacing-6)',
-                            border: '1px solid #fecaca'
-                        }}>
-                            <AlertTriangle size={20} style={{ color: 'var(--color-danger)', flexShrink: 0, marginTop: '2px' }} />
-                            <div>
-                                <strong style={{ color: 'var(--color-danger)', display: 'block', marginBottom: '4px' }}>
-                                    Supabase Not Configured
-                                </strong>
-                                <p style={{ color: 'var(--color-gray-600)', fontSize: 'var(--font-size-sm)', margin: 0 }}>
-                                    Create a <code style={{ background: 'var(--color-gray-100)', padding: '2px 4px', borderRadius: '4px' }}>.env</code> file with your Supabase credentials:
-                                </p>
-                                <pre style={{
-                                    background: 'var(--color-gray-100)',
-                                    padding: 'var(--spacing-3)',
-                                    borderRadius: 'var(--radius-sm)',
-                                    marginTop: 'var(--spacing-2)',
-                                    fontSize: 'var(--font-size-xs)',
-                                    overflow: 'auto'
-                                }}>
-                                    {`VITE_SUPABASE_URL=your_url
-VITE_SUPABASE_ANON_KEY=your_key`}
-                                </pre>
-                            </div>
-                        </div>
-                    )}
-
                     <div className="login-tabs">
                         <button
                             type="button"
                             className={`login-tab ${!isSignUp ? 'active' : ''}`}
-                            onClick={() => { setIsSignUp(false); setError(''); setMessage('') }}
+                            onClick={() => { setIsSignUp(false); setError('') }}
                         >
                             Sign In
                         </button>
                         <button
                             type="button"
                             className={`login-tab ${isSignUp ? 'active' : ''}`}
-                            onClick={() => { setIsSignUp(true); setError(''); setMessage('') }}
+                            onClick={() => { setIsSignUp(true); setError('') }}
                         >
                             Sign Up
                         </button>
@@ -190,12 +140,11 @@ VITE_SUPABASE_ANON_KEY=your_key`}
                         )}
 
                         {error && <p className="form-error">{error}</p>}
-                        {message && <p style={{ color: 'var(--color-primary)', fontSize: 'var(--font-size-sm)', marginTop: 'var(--spacing-2)' }}>{message}</p>}
 
                         <button
                             type="submit"
                             className="btn btn-primary login-btn"
-                            disabled={loading || configError}
+                            disabled={loading}
                         >
                             {loading ? 'Please wait...' : (isSignUp ? 'Create Account' : 'Sign In')}
                         </button>

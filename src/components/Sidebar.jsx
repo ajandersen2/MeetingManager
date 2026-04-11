@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { FolderOpen, Plus, Users, ChevronRight, Hash, Settings, User } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 
 export default function Sidebar({ selectedGroupId, onSelectGroup, onCreateGroup, onManageGroup, isOpen }) {
@@ -15,59 +15,23 @@ export default function Sidebar({ selectedGroupId, onSelectGroup, onCreateGroup,
         }
     }, [user])
 
+    // Poll for group changes
+    useEffect(() => {
+        if (!user) return
+        const interval = setInterval(fetchGroups, 30000) // Poll every 30s
+        return () => clearInterval(interval)
+    }, [user])
+
     const fetchGroups = async () => {
         try {
-            // Get groups with meeting counts
-            const { data, error } = await supabase
-                .from('group_members')
-                .select(`
-          role,
-          meeting_groups (
-            id,
-            name,
-            join_code
-          )
-        `)
-                .eq('user_id', user.id)
-
-            if (error) throw error
-
-            // Get meeting counts per group
-            const { data: meetingCounts } = await supabase
-                .from('meetings')
-                .select('group_id')
-                .not('group_id', 'is', null)
-
-            const countMap = {}
-            meetingCounts?.forEach(m => {
-                countMap[m.group_id] = (countMap[m.group_id] || 0) + 1
-            })
-
-            const groupsWithCounts = data?.map(gm => ({
-                ...gm.meeting_groups,
-                role: gm.role,
-                meetingCount: countMap[gm.meeting_groups?.id] || 0
-            })).filter(g => g.id) || []
-
-            setGroups(groupsWithCounts)
+            const data = await api.get('/api/groups')
+            setGroups(data || [])
         } catch (error) {
             console.error('Error fetching groups:', error)
         } finally {
             setLoading(false)
         }
     }
-
-    // Refresh groups when needed (called from parent)
-    useEffect(() => {
-        const channel = supabase
-            .channel('group_changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members' }, () => {
-                fetchGroups()
-            })
-            .subscribe()
-
-        return () => supabase.removeChannel(channel)
-    }, [user])
 
     return (
         <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''} ${isOpen ? 'sidebar-open' : ''}`}>
@@ -85,7 +49,6 @@ export default function Sidebar({ selectedGroupId, onSelectGroup, onCreateGroup,
             </div>
 
             <nav className="sidebar-nav">
-                {/* All Meetings */}
                 <button
                     className={`sidebar-item ${selectedGroupId === null ? 'active' : ''}`}
                     onClick={() => onSelectGroup(null)}
@@ -98,7 +61,6 @@ export default function Sidebar({ selectedGroupId, onSelectGroup, onCreateGroup,
                     )}
                 </button>
 
-                {/* Groups List */}
                 {!collapsed && <div className="sidebar-divider" />}
 
                 {loading ? (
@@ -134,7 +96,6 @@ export default function Sidebar({ selectedGroupId, onSelectGroup, onCreateGroup,
                 )}
             </nav>
 
-            {/* User Info & Create Group */}
             <div className="sidebar-footer">
                 {!collapsed && (
                     <div className="sidebar-user">

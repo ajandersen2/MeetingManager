@@ -4,7 +4,7 @@ import AudioRecorder from './AudioRecorder'
 import { Printer, Maximize2, Sparkles, X, Mic, FileText } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import DOMPurify from 'dompurify'
 
 export default function MinutesTab({ content, onChange, formData, meetingId, rawTranscript, onRawTranscriptChange, autoStartRecording }) {
@@ -28,16 +28,12 @@ export default function MinutesTab({ content, onChange, formData, meetingId, raw
         return () => document.removeEventListener('keydown', handleEsc)
     }, [isFullscreen])
 
-    // Fetch stored API key from Supabase
+    // Fetch stored API key
     useEffect(() => {
         const fetchApiKey = async () => {
             if (!user) return
             try {
-                const { data } = await supabase
-                    .from('user_api_keys')
-                    .select('openai_api_key')
-                    .eq('user_id', user.id)
-                    .single()
+                const data = await api.get('/api/api-keys')
                 if (data?.openai_api_key) {
                     setStoredApiKey(data.openai_api_key)
                 }
@@ -50,7 +46,8 @@ export default function MinutesTab({ content, onChange, formData, meetingId, raw
 
     const formatDate = (dateStr) => {
         if (!dateStr) return ''
-        const date = new Date(dateStr + 'T00:00:00')
+        const normalized = dateStr.substring(0, 10)
+        const date = new Date(normalized + 'T00:00:00')
         return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     }
 
@@ -96,14 +93,12 @@ export default function MinutesTab({ content, onChange, formData, meetingId, raw
     }
 
     const handleTranscriptReady = (transcript, speakerCount) => {
-        // Format the transcript as HTML
         let formattedHtml = '<h3>Meeting Transcript</h3>'
         
         if (speakerCount > 0) {
             formattedHtml += `<p><em>${speakerCount} speaker${speakerCount !== 1 ? 's' : ''} detected</em></p>`
         }
 
-        // Convert plain text with Speaker labels to HTML
         const lines = transcript.split('\n\n')
         for (const line of lines) {
             const speakerMatch = line.match(/^Speaker (\d+): (.+)/)
@@ -122,12 +117,9 @@ export default function MinutesTab({ content, onChange, formData, meetingId, raw
     }
 
     const handleGenerateWithAI = async () => {
-        // Prefer stored API key, fallback to env var
         const openaiKey = storedApiKey || import.meta.env.VITE_OPENAI_API_KEY
-        const geminiKey = import.meta.env.VITE_GEMINI_API_KEY
 
-        if ((!geminiKey || geminiKey === 'your_gemini_api_key') &&
-            (!openaiKey || openaiKey === 'your_openai_api_key')) {
+        if (!openaiKey || openaiKey === 'your_openai_api_key') {
             alert('No API key found. Please add your OpenAI API key in Settings > Admin.')
             generateSmartTemplate()
             return
@@ -138,24 +130,13 @@ export default function MinutesTab({ content, onChange, formData, meetingId, raw
         try {
             // Save current content as raw transcript before AI generation
             if (content && meetingId) {
-                const { error: saveError } = await supabase
-                    .from('meetings')
-                    .update({ raw_transcript: content })
-                    .eq('id', meetingId)
-
-                if (saveError) {
+                try {
+                    await api.put(`/api/meetings/${meetingId}`, { raw_transcript: content })
+                    if (onRawTranscriptChange) {
+                        onRawTranscriptChange(content)
+                    }
+                } catch (saveError) {
                     console.error('Error saving raw transcript:', saveError)
-                } else if (onRawTranscriptChange) {
-                    onRawTranscriptChange(content)
-                }
-            }
-
-            // Try Gemini first if available
-            if (geminiKey && geminiKey !== 'your_gemini_api_key') {
-                const result = await generateWithGemini(geminiKey)
-                if (result) {
-                    onChange(result)
-                    return
                 }
             }
 
@@ -176,86 +157,6 @@ export default function MinutesTab({ content, onChange, formData, meetingId, raw
         } finally {
             setGenerating(false)
         }
-    }
-
-    const generateWithGemini = async (apiKey) => {
-        const attendeeNames = formData.attendees?.map(a => typeof a === 'object' ? a.name : a).join(', ') || 'None listed'
-
-        const prompt = `You are a professional corporate secretary generating comprehensive, detailed meeting minutes. The header information (meeting name, date, time, location, attendees) is already displayed in the UI - focus ONLY on the substantive content.
-
-MEETING CONTEXT (for your understanding, DO NOT repeat in output):
-- Meeting Name: ${formData.name || 'Board Meeting'}
-- Date: ${formatDate(formData.date) || 'Not specified'}
-- Time: ${formatTime(formData.time) || 'Not specified'}
-- Location: ${formData.location || 'Not specified'}
-- Objective: ${formData.objective || 'Not specified'}
-- Attendees: ${attendeeNames}
-- Agenda: ${formData.agenda_content || 'Not provided'}
-${content ? `- Notes/Transcript: ${content.replace(/<[^>]*>/g, ' ').substring(0, 10000)}` : ''}
-
-INSTRUCTIONS:
-1. Use attendee names to attribute statements and identify who said what
-2. Be COMPREHENSIVE and DETAILED - this is official documentation
-3. Include specific quotes or paraphrases when relevant
-4. Capture nuance, concerns raised, and differing viewpoints
-
-Generate the following sections in HTML format (h3 for headings, p for paragraphs, ul/li for lists):
-
-<h3>DISCUSSION SUMMARY</h3>
-- Provide a detailed narrative of key topics discussed
-- Attribute statements to specific attendees when identifiable (e.g., "[Name] raised concerns about...")
-- Include multiple paragraphs covering each major topic
-- Note any debates, questions raised, or concerns expressed
-
-<h3>KEY DECISIONS</h3>
-- List each decision made with context
-- Note who proposed and who approved (if identifiable)
-- Include any vote counts or unanimous agreements
-- Explain the rationale behind decisions
-
-<h3>ACTION ITEMS</h3>
-For each action item, include:
-- <strong>[Assignee Name]:</strong> Specific task description
-- Due date if mentioned
-- Any dependencies or blockers noted
-- Create AT LEAST 3-5 action items based on the discussion
-
-<h3>FOLLOW-UP ITEMS</h3>
-- Topics deferred to next meeting
-- Items requiring further research or information
-- Pending decisions awaiting additional input
-
-<h3>NEXT STEPS</h3>
-- Immediate priorities before next meeting
-- Suggested agenda items for follow-up
-- Any scheduled check-ins or deadlines
-
-Be thorough and professional. These minutes serve as official record.`
-
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        temperature: settings.temperature,
-                        maxOutputTokens: settings.max_tokens,
-                    }
-                })
-            }
-        )
-
-        const data = await response.json()
-
-        if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            let text = data.candidates[0].content.parts[0].text
-            text = text.replace(/```html\n?/g, '').replace(/```\n?/g, '')
-            return text
-        }
-
-        return null
     }
 
     const generateWithOpenAI = async (apiKey) => {
@@ -359,7 +260,6 @@ ${formData.attendees?.length > 0
         onChange(template.trim())
     }
 
-    // Render the editor/preview content
     const renderContent = () => (
         mode === 'edit' ? (
             <RichTextEditor
@@ -394,7 +294,6 @@ ${formData.attendees?.length > 0
         )
     )
 
-    // Render toolbar buttons
     const renderToolbar = (showClose = false) => (
         <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center' }}>
             <button
@@ -457,7 +356,6 @@ ${formData.attendees?.length > 0
 
     return (
         <div>
-            {/* Fullscreen overlay */}
             {isFullscreen && (
                 <div className="minutes-fullscreen-overlay">
                     <div className="minutes-fullscreen-container">
@@ -481,7 +379,6 @@ ${formData.attendees?.length > 0
                 </div>
             )}
 
-            {/* Normal inline view */}
             <div className="editor-header">
                 <span className="editor-header-label">Meeting Minutes</span>
                 {renderToolbar(false)}

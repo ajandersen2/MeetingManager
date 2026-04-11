@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Copy, Check, Mail, Trash2, LogOut, Users, Hash, Clock, UserCheck, XCircle } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 
 export default function GroupModal({ group, isOpen, onClose, onSave }) {
@@ -34,49 +34,22 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
 
     const fetchMembers = async () => {
         if (!group?.id) return
-
-        const { data, error } = await supabase
-            .from('group_members')
-            .select(`
-        id,
-        role,
-        user_id,
-        user_profiles (display_name)
-      `)
-            .eq('group_id', group.id)
-
-        if (!error && data) {
-            const membersWithInfo = data.map(m => ({
-                ...m,
-                display_name: m.user_profiles?.display_name || 'Unknown User',
-                isCurrentUser: m.user_id === user?.id
-            }))
-            setMembers(membersWithInfo)
+        try {
+            const data = await api.get(`/api/groups/${group.id}/members`)
+            setMembers(data || [])
+        } catch (err) {
+            console.error('Error fetching members:', err)
         }
     }
 
     const fetchInvitations = async () => {
         if (!group?.id) return
-
-        const { data, error } = await supabase
-            .from('group_invitations')
-            .select('*')
-            .eq('group_id', group.id)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false })
-
-        if (!error && data) {
-            setInvitations(data)
+        try {
+            const data = await api.get(`/api/groups/${group.id}/invitations`)
+            setInvitations(data || [])
+        } catch (err) {
+            console.error('Error fetching invitations:', err)
         }
-    }
-
-    const generateJoinCode = () => {
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-        let code = ''
-        for (let i = 0; i < 6; i++) {
-            code += chars.charAt(Math.floor(Math.random() * chars.length))
-        }
-        return code
     }
 
     const handleSave = async () => {
@@ -90,35 +63,9 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
 
         try {
             if (isEditing) {
-                const { error } = await supabase
-                    .from('meeting_groups')
-                    .update({ name: name.trim() })
-                    .eq('id', group.id)
-
-                if (error) throw error
+                await api.put(`/api/groups/${group.id}`, { name: name.trim() })
             } else {
-                const joinCode = generateJoinCode()
-                const { data: newGroup, error: createError } = await supabase
-                    .from('meeting_groups')
-                    .insert({
-                        name: name.trim(),
-                        join_code: joinCode,
-                        created_by: user.id
-                    })
-                    .select()
-                    .single()
-
-                if (createError) throw createError
-
-                const { error: memberError } = await supabase
-                    .from('group_members')
-                    .insert({
-                        group_id: newGroup.id,
-                        user_id: user.id,
-                        role: 'owner'
-                    })
-
-                if (memberError) throw memberError
+                await api.post('/api/groups', { name: name.trim() })
             }
 
             onSave?.()
@@ -140,7 +87,6 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
         const email = inviteEmail.trim().toLowerCase()
         if (!email) return
 
-        // Basic email validation
         if (!email.includes('@') || !email.includes('.')) {
             setError('Please enter a valid email address')
             return
@@ -151,7 +97,6 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
         setSuccess('')
 
         try {
-            // Check if already invited
             const existingInvite = invitations.find(i => i.email === email)
             if (existingInvite) {
                 setError('This email has already been invited')
@@ -159,47 +104,7 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
                 return
             }
 
-            // Create invitation
-            const { error: inviteError } = await supabase
-                .from('group_invitations')
-                .insert({
-                    group_id: group.id,
-                    email: email,
-                    invited_by: user.id,
-                    status: 'pending'
-                })
-
-            if (inviteError) {
-                if (inviteError.code === '23505') {
-                    setError('This email has already been invited')
-                } else {
-                    throw inviteError
-                }
-                setInviting(false)
-                return
-            }
-
-            // Get current user's profile for inviter name
-            const { data: profile } = await supabase
-                .from('user_profiles')
-                .select('display_name')
-                .eq('user_id', user.id)
-                .single()
-
-            // Send invitation email via Edge Function
-            try {
-                await supabase.functions.invoke('send-invitation-email', {
-                    body: {
-                        email: email,
-                        groupName: group.name,
-                        inviterName: profile?.display_name || user.email,
-                        joinCode: group.join_code
-                    }
-                })
-            } catch (emailError) {
-                // Email sending failed but invitation was created - log but don't fail
-                console.warn('Email sending failed:', emailError)
-            }
+            await api.post(`/api/groups/${group.id}/invite`, { email })
 
             setSuccess(`Invitation sent to ${email}`)
             setInviteEmail('')
@@ -213,12 +118,7 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
 
     const handleCancelInvitation = async (invitationId) => {
         try {
-            const { error } = await supabase
-                .from('group_invitations')
-                .delete()
-                .eq('id', invitationId)
-
-            if (error) throw error
+            await api.delete(`/api/invitations/${invitationId}`)
             fetchInvitations()
         } catch (err) {
             setError(err.message)
@@ -229,12 +129,7 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
         if (!confirm('Remove this member from the group?')) return
 
         try {
-            const { error } = await supabase
-                .from('group_members')
-                .delete()
-                .eq('id', memberId)
-
-            if (error) throw error
+            await api.delete(`/api/groups/${group.id}/members/${memberId}`)
 
             if (memberUserId === user.id) {
                 onSave?.()
@@ -251,12 +146,7 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
         if (!confirm('Delete this group? Meetings will become ungrouped (not deleted).')) return
 
         try {
-            const { error } = await supabase
-                .from('meeting_groups')
-                .delete()
-                .eq('id', group.id)
-
-            if (error) throw error
+            await api.delete(`/api/groups/${group.id}`)
             onSave?.()
             onClose()
         } catch (err) {
@@ -289,7 +179,6 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
                 </div>
 
                 <div className="modal-body">
-                    {/* Group Name */}
                     <div className="form-group">
                         <label className="form-label required">Group Name</label>
                         <input
@@ -302,7 +191,6 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
                         />
                     </div>
 
-                    {/* Join Code */}
                     {isEditing && (
                         <div className="form-group">
                             <label className="form-label">Join Code</label>
@@ -320,7 +208,6 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
                         </div>
                     )}
 
-                    {/* Invite by Email (owners only) */}
                     {isEditing && isOwner && (
                         <div className="form-group">
                             <label className="form-label">
@@ -348,7 +235,6 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
                         </div>
                     )}
 
-                    {/* Pending Invitations */}
                     {isEditing && isOwner && invitations.length > 0 && (
                         <div className="form-group">
                             <label className="form-label">
@@ -376,7 +262,6 @@ export default function GroupModal({ group, isOpen, onClose, onSave }) {
                         </div>
                     )}
 
-                    {/* Members List */}
                     {isEditing && (
                         <div className="form-group">
                             <label className="form-label">

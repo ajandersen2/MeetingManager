@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Mail, Check, X } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 
 export default function InvitationsDropdown({ onInvitationAccepted }) {
@@ -11,7 +11,7 @@ export default function InvitationsDropdown({ onInvitationAccepted }) {
     const dropdownRef = useRef(null)
 
     useEffect(() => {
-        if (user?.email) {
+        if (user) {
             fetchInvitations()
         }
     }, [user])
@@ -26,68 +26,27 @@ export default function InvitationsDropdown({ onInvitationAccepted }) {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
-    // Realtime subscription for new invitations
+    // Poll for new invitations
     useEffect(() => {
-        if (!user?.email) return
-
-        const channel = supabase
-            .channel('invitation_changes')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'group_invitations',
-                filter: `email=eq.${user.email}`
-            }, () => {
-                fetchInvitations()
-            })
-            .subscribe()
-
-        return () => supabase.removeChannel(channel)
+        if (!user) return
+        const interval = setInterval(fetchInvitations, 30000)
+        return () => clearInterval(interval)
     }, [user])
 
     const fetchInvitations = async () => {
-        if (!user?.email) return
-
-        const { data, error } = await supabase
-            .from('group_invitations')
-            .select(`
-        *,
-        meeting_groups (name)
-      `)
-            .eq('email', user.email)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false })
-
-        if (!error && data) {
-            setInvitations(data)
+        if (!user) return
+        try {
+            const data = await api.get('/api/invitations')
+            setInvitations(data || [])
+        } catch (err) {
+            // Silently fail
         }
     }
 
     const handleAccept = async (invitation) => {
         setLoading(true)
         try {
-            // Add user to group
-            const { error: memberError } = await supabase
-                .from('group_members')
-                .insert({
-                    group_id: invitation.group_id,
-                    user_id: user.id,
-                    role: 'member'
-                })
-
-            if (memberError) throw memberError
-
-            // Update invitation status
-            const { error: updateError } = await supabase
-                .from('group_invitations')
-                .update({
-                    status: 'accepted',
-                    responded_at: new Date().toISOString()
-                })
-                .eq('id', invitation.id)
-
-            if (updateError) throw updateError
-
+            await api.post(`/api/invitations/${invitation.id}/accept`)
             fetchInvitations()
             onInvitationAccepted?.()
         } catch (error) {
@@ -101,15 +60,7 @@ export default function InvitationsDropdown({ onInvitationAccepted }) {
     const handleDecline = async (invitation) => {
         setLoading(true)
         try {
-            const { error } = await supabase
-                .from('group_invitations')
-                .update({
-                    status: 'declined',
-                    responded_at: new Date().toISOString()
-                })
-                .eq('id', invitation.id)
-
-            if (error) throw error
+            await api.post(`/api/invitations/${invitation.id}/decline`)
             fetchInvitations()
         } catch (error) {
             console.error('Error declining invitation:', error)
@@ -139,7 +90,7 @@ export default function InvitationsDropdown({ onInvitationAccepted }) {
                     {invitations.map(inv => (
                         <div key={inv.id} className="invitation-card">
                             <div className="invitation-card-group">
-                                {inv.meeting_groups?.name || 'Unknown Group'}
+                                {inv.meeting_groups?.name || inv.group_name || 'Unknown Group'}
                             </div>
                             <div className="invitation-card-from">
                                 You've been invited to join this group

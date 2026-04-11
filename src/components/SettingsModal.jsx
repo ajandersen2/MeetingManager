@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Settings, Sparkles, User, Key, Eye, EyeOff, Mic } from 'lucide-react'
 import { useSettings } from '../context/SettingsContext'
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 
 const AI_MODELS = [
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Recommended)', description: 'Fast, affordable, great quality' },
@@ -21,14 +21,12 @@ export default function SettingsModal({ isOpen, onClose }) {
     const [error, setError] = useState(null)
     const [profileSuccess, setProfileSuccess] = useState(false)
 
-    // Admin API key state
     const [openaiApiKey, setOpenaiApiKey] = useState('')
     const [showApiKey, setShowApiKey] = useState(false)
     const [savingApiKey, setSavingApiKey] = useState(false)
     const [apiKeySuccess, setApiKeySuccess] = useState(false)
     const [loadingApiKey, setLoadingApiKey] = useState(false)
 
-    // Deepgram API key state
     const [deepgramApiKey, setDeepgramApiKey] = useState('')
     const [showDeepgramKey, setShowDeepgramKey] = useState(false)
     const [savingDeepgramKey, setSavingDeepgramKey] = useState(false)
@@ -42,7 +40,6 @@ export default function SettingsModal({ isOpen, onClose }) {
         }
     }, [userProfile, user])
 
-    // Load API key when admin tab is opened
     useEffect(() => {
         if (isOpen && isAdmin && activeTab === 'admin') {
             loadApiKey()
@@ -52,20 +49,11 @@ export default function SettingsModal({ isOpen, onClose }) {
     const loadApiKey = async () => {
         setLoadingApiKey(true)
         try {
-            const { data, error } = await supabase
-                .from('user_api_keys')
-                .select('openai_api_key, deepgram_api_key')
-                .eq('user_id', user.id)
-                .single()
-
-            if (data?.openai_api_key) {
-                setOpenaiApiKey(data.openai_api_key)
-            }
-            if (data?.deepgram_api_key) {
-                setDeepgramApiKey(data.deepgram_api_key)
-            }
+            const data = await api.get('/api/api-keys')
+            if (data?.openai_api_key) setOpenaiApiKey(data.openai_api_key)
+            if (data?.deepgram_api_key) setDeepgramApiKey(data.deepgram_api_key)
         } catch (err) {
-            // No key exists yet, that's fine
+            // No key exists yet
         }
         setLoadingApiKey(false)
     }
@@ -93,12 +81,7 @@ export default function SettingsModal({ isOpen, onClose }) {
         setProfileSuccess(false)
 
         try {
-            const { error } = await supabase
-                .from('user_profiles')
-                .update({ display_name: displayName })
-                .eq('user_id', user.id)
-
-            if (error) throw error
+            await api.put('/api/profile', { display_name: displayName })
             setProfileSuccess(true)
             setTimeout(() => setProfileSuccess(false), 2000)
         } catch (err) {
@@ -114,18 +97,7 @@ export default function SettingsModal({ isOpen, onClose }) {
         setApiKeySuccess(false)
 
         try {
-            // Upsert the API key
-            const { error } = await supabase
-                .from('user_api_keys')
-                .upsert({
-                    user_id: user.id,
-                    openai_api_key: openaiApiKey,
-                    updated_at: new Date().toISOString()
-                }, {
-                    onConflict: 'user_id'
-                })
-
-            if (error) throw error
+            await api.put('/api/api-keys', { openai_api_key: openaiApiKey })
             setApiKeySuccess(true)
             setTimeout(() => setApiKeySuccess(false), 2000)
         } catch (err) {
@@ -142,17 +114,7 @@ export default function SettingsModal({ isOpen, onClose }) {
         setDeepgramKeySuccess(false)
 
         try {
-            const { error } = await supabase
-                .from('user_api_keys')
-                .upsert({
-                    user_id: user.id,
-                    deepgram_api_key: deepgramApiKey,
-                    updated_at: new Date().toISOString()
-                }, {
-                    onConflict: 'user_id'
-                })
-
-            if (error) throw error
+            await api.put('/api/api-keys', { deepgram_api_key: deepgramApiKey })
             setDeepgramKeySuccess(true)
             setTimeout(() => setDeepgramKeySuccess(false), 2000)
         } catch (err) {
@@ -188,7 +150,6 @@ export default function SettingsModal({ isOpen, onClose }) {
                     </button>
                 </div>
 
-                {/* Tabs */}
                 <div className="tabs" style={{ padding: '0 var(--spacing-4)', borderBottom: '1px solid var(--color-gray-200)' }}>
                     <button
                         className={`tab ${activeTab === 'profile' ? 'active' : ''}`}
@@ -209,7 +170,6 @@ export default function SettingsModal({ isOpen, onClose }) {
                 </div>
 
                 <div className="modal-body">
-                    {/* Profile Tab */}
                     {activeTab === 'profile' && (
                         <div className="settings-section">
                             <h3 className="settings-section-title">
@@ -253,10 +213,8 @@ export default function SettingsModal({ isOpen, onClose }) {
                         </div>
                     )}
 
-                    {/* Admin Tab */}
                     {activeTab === 'admin' && isAdmin && (
                         <>
-                            {/* API Keys Section */}
                             <div className="settings-section">
                                 <h3 className="settings-section-title">
                                     <Key size={18} />
@@ -355,7 +313,6 @@ export default function SettingsModal({ isOpen, onClose }) {
                                 </div>
                             </div>
 
-                            {/* AI Configuration Section */}
                             <div className="settings-section">
                                 <h3 className="settings-section-title">
                                     <Sparkles size={18} />

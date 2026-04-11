@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, MapPin, Calendar, User, UserCheck } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import TimePicker from './TimePicker'
 
 export default function MeetingTab({ formData, updateFormData, groupId }) {
@@ -51,33 +51,16 @@ export default function MeetingTab({ formData, updateFormData, groupId }) {
             let data = []
 
             if (groupId) {
-                // Fetch only group members
-                const { data: members, error } = await supabase
-                    .from('group_members')
-                    .select(`
-            user_id,
-            role,
-            user_profiles (display_name)
-          `)
-                    .eq('group_id', groupId)
-
-                if (!error && members) {
-                    data = members.map(m => ({
-                        user_id: m.user_id,
-                        display_name: m.user_profiles?.display_name || 'Unknown',
-                        role: m.role
-                    }))
-                }
-            } else {
-                // Fetch all users with profiles
-                const { data: profiles, error } = await supabase
-                    .from('user_profiles')
-                    .select('user_id, display_name, role')
-
-                if (!error && profiles) {
-                    data = profiles.filter(p => p.display_name) // Only show users with display names
-                }
+                // Fetch group members
+                const members = await api.get(`/api/groups/${groupId}/members`)
+                data = (members || []).map(m => ({
+                    user_id: m.user_id,
+                    display_name: m.display_name || 'Unknown',
+                    role: m.role
+                }))
             }
+            // Note: without a group, we don't fetch all users for privacy.
+            // Users can still type custom attendee names.
 
             setUsers(data)
         } catch (error) {
@@ -90,7 +73,6 @@ export default function MeetingTab({ formData, updateFormData, groupId }) {
     const handleAddAttendee = (e) => {
         if (e.key === 'Enter' && attendeeInput.trim()) {
             e.preventDefault()
-            // Check if there's a matching user in filtered results
             if (filteredUsers.length > 0) {
                 addUserAttendee(filteredUsers[0])
             } else {

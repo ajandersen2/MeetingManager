@@ -4,7 +4,7 @@ import Login from './pages/Login'
 import Meetings from './pages/Meetings'
 
 function ProtectedRoute({ children }) {
-    const { user, loading, configError } = useAuth()
+    const { user, loading } = useAuth()
 
     if (loading) {
         return (
@@ -14,8 +14,7 @@ function ProtectedRoute({ children }) {
         )
     }
 
-    // If Supabase is not configured or no user, show the login page
-    if (configError || !user) {
+    if (!user) {
         return <Navigate to="/login" replace />
     }
 
